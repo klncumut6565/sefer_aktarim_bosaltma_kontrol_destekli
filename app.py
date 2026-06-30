@@ -106,11 +106,22 @@ col_excel, col_pdf = st.columns(2)
 
 with col_excel:
     st.subheader("1️⃣ Excel Taşıma Kontrol Listesi")
-    excel_dosya = st.file_uploader(
-        "Mevcut Excel dosyanızı yükleyin (.xlsx)",
-        type=["xlsx"],
-        help="Sefer verileri bu dosyaya tarih sırasına göre eklenecektir.",
+    excel_modu = st.radio(
+        "Mod seçin",
+        options=["yeni", "guncelle"],
+        format_func=lambda v: "📄 Yeni Liste Oluştur" if v == "yeni" else "📂 Mevcut Listeyi Güncelle",
+        horizontal=True,
+        key="excel_modu",
     )
+    if excel_modu == "guncelle":
+        excel_dosya = st.file_uploader(
+            "Mevcut Excel dosyanızı yükleyin (.xlsx)",
+            type=["xlsx"],
+            help="Sefer verileri bu dosyaya tarih sırasına göre eklenir.",
+        )
+    else:
+        excel_dosya = None
+        st.info("📋 Program, yerleşik boş şablonu kullanarak yeni bir **Taşıma_Kontrol_Listesi.xlsx** dosyası oluşturacak.")
 
 with col_pdf:
     st.subheader("2️⃣ Sefer Bildirimi PDF'leri")
@@ -205,14 +216,23 @@ st.divider()
 calistir = st.button("▶️ Aktar", type="primary", use_container_width=True)
 
 if calistir:
-    if not excel_dosya:
+    excel_modu = st.session_state.get("excel_modu", "guncelle")
+    if excel_modu == "guncelle" and not excel_dosya:
         st.error("Lütfen bir Excel dosyası yükleyin.")
     elif not pdf_dosyalari:
         st.error("Lütfen en az bir PDF dosyası yükleyin.")
     else:
         with st.spinner("İşleniyor…"):
+            # Excel şablonunu belirle
             excel_yolu = CALISMA_KLASORU / "girdi.xlsx"
-            excel_yolu.write_bytes(excel_dosya.getvalue())
+            if excel_modu == "yeni":
+                # Gömülü boş şablonu kullan
+                sablon_yolu = Path(__file__).parent / "bos_sablon.xlsx"
+                excel_yolu.write_bytes(sablon_yolu.read_bytes())
+                cikti_excel_yolu = CALISMA_KLASORU / "Taşıma_Kontrol_Listesi.xlsx"
+            else:
+                excel_yolu.write_bytes(excel_dosya.getvalue())
+                cikti_excel_yolu = CALISMA_KLASORU / f"{Path(excel_dosya.name).stem}_guncel.xlsx"
 
             pdf_yollari = []
             for pf in pdf_dosyalari:
@@ -220,7 +240,6 @@ if calistir:
                 p.write_bytes(pf.getvalue())
                 pdf_yollari.append(p)
 
-            cikti_excel_yolu = CALISMA_KLASORU / f"{Path(excel_dosya.name).stem}_guncel.xlsx"
             docx_cikti_klasoru = CALISMA_KLASORU / "kontrol_dokumanlari"
 
             log_mesajlari = []
