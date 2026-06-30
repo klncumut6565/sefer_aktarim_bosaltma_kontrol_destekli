@@ -34,8 +34,8 @@ st.markdown(
     <style>
     div.st-key-docx_karti,
     div.st-key-imza_karti {
-        background-color: #C8E6C9;
-        border: 2px solid #4CAF50 !important;
+        background-color: #FCE4EC;
+        border: 2px solid #F48FB1 !important;
         border-radius: 10px;
         padding: 0.5rem;
     }
