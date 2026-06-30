@@ -28,6 +28,20 @@ st.set_page_config(
 st.title("🚚 Sefer Aktarım")
 st.caption("PDF sefer bildirimlerini Excel kontrol listesine aktarın ve Boşaltma Kontrol Dökümanı oluşturun.")
 
+# Boşaltma Kontrol Dökümanı kartını vurgulamak için özel stil
+st.markdown(
+    """
+    <style>
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(div.docx-vurgu-isaret) {
+        background-color: #FFF4D6;
+        border: 1px solid #F0C36D !important;
+        border-radius: 10px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ---------------------------------------------------------------------------
 # Oturum durumu
 # ---------------------------------------------------------------------------
@@ -113,6 +127,7 @@ with col_tasima:
 with col_docx:
     st.subheader("4️⃣ Boşaltma Kontrol Dökümanı")
     with st.container(border=True):
+        st.markdown('<div class="docx-vurgu-isaret"></div>', unsafe_allow_html=True)
         docx_uret = st.checkbox(
             "**📋 Her sefer için Boşaltma Kontrol Dökümanı oluştur**",
             value=False,
