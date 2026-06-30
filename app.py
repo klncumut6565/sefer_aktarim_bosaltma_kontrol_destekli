@@ -22,7 +22,7 @@ from core_logic import extract_pdf_data, process_pdfs, _DOCX_DESTEGI
 st.set_page_config(
     page_title="Sefer Aktarım — Taşımacılık Kontrol Listesi",
     page_icon="🚚",
-    layout="centered",
+    layout="wide",
 )
 
 st.title("🚚 Sefer Aktarım")
@@ -43,111 +43,114 @@ if "logo_bytes" not in st.session_state:
 CALISMA_KLASORU = Path(st.session_state.calisma_klasoru)
 
 # ---------------------------------------------------------------------------
-# 0) Firma Logosu (isteğe bağlı, oturum boyunca hatırlanır)
+# SOL KENAR ÇUBUĞU — Firma Logosu + Boşaltan/Şoför Adı Soyadı
 # ---------------------------------------------------------------------------
-st.subheader("🏢 Firma Logosu")
-logo_dosya = st.file_uploader(
-    "Logonuzu yükleyin (Excel'in ve Kontrol Dökümanının sol üst köşesine eklenir)",
-    type=["png", "jpg", "jpeg"],
-    key="logo_uploader",
-)
-if logo_dosya is not None:
-    st.session_state.logo_bytes = logo_dosya.getvalue()
+with st.sidebar:
+    st.header("🏢 Firma Bilgileri")
 
-if st.session_state.logo_bytes:
-    c1, c2 = st.columns([1, 4])
-    with c1:
-        st.image(st.session_state.logo_bytes, width=100)
-    with c2:
-        st.caption("Logo yüklendi, bu oturumdaki tüm aktarımlarda kullanılacak.")
-        if st.button("🗑️ Logoyu Kaldır"):
+    logo_dosya = st.file_uploader(
+        "Firma Logosu",
+        type=["png", "jpg", "jpeg"],
+        key="logo_uploader",
+        help="Excel'in ve Kontrol Dökümanının sol üst köşesine eklenir.",
+    )
+    if logo_dosya is not None:
+        st.session_state.logo_bytes = logo_dosya.getvalue()
+
+    if st.session_state.logo_bytes:
+        st.image(st.session_state.logo_bytes, width=160)
+        if st.button("🗑️ Logoyu Kaldır", use_container_width=True):
             st.session_state.logo_bytes = None
             st.rerun()
-else:
-    st.caption("Logo yüklenmezse Excel/Kontrol Dökümanı varsayılan haliyle (logosuz) oluşturulur.")
+    else:
+        st.caption("Logo yüklenmezse çıktılar logosuz oluşturulur.")
+
+    st.divider()
+
+    st.subheader("👤 İmza Bilgileri")
+    bosaltan_adi = st.text_input("Boşaltan Adı Soyadı")
+    sofor_adi = st.text_input("Taşıyıcı/Şoför Adı Soyadı")
+    st.caption("Bu bilgiler, oluşturulan tüm Kontrol Dökümanlarında kullanılır.")
+
+# ---------------------------------------------------------------------------
+# ANA EKRAN — 1) Excel + 2) PDF yükleme (yan yana)
+# ---------------------------------------------------------------------------
+col_excel, col_pdf = st.columns(2)
+
+with col_excel:
+    st.subheader("1️⃣ Excel Taşıma Kontrol Listesi")
+    excel_dosya = st.file_uploader(
+        "Mevcut Excel dosyanızı yükleyin (.xlsx)",
+        type=["xlsx"],
+        help="Sefer verileri bu dosyaya tarih sırasına göre eklenecektir.",
+    )
+
+with col_pdf:
+    st.subheader("2️⃣ Sefer Bildirimi PDF'leri")
+    pdf_dosyalari = st.file_uploader(
+        "Bir veya birden fazla sefer bildirimi PDF'i yükleyin",
+        type=["pdf"],
+        accept_multiple_files=True,
+    )
 
 st.divider()
 
 # ---------------------------------------------------------------------------
-# 1) Excel şablonu yükleme
+# 3) Taşıma türü + 4) Kontrol Dökümanı seçeneği (yan yana)
 # ---------------------------------------------------------------------------
-st.subheader("1️⃣ Excel Taşıma Kontrol Listesi")
-excel_dosya = st.file_uploader(
-    "Mevcut Excel dosyanızı yükleyin (.xlsx)",
-    type=["xlsx"],
-    help="Sefer verileri bu dosyaya tarih sırasına göre eklenecektir.",
-)
+col_tasima, col_docx = st.columns(2)
 
-# ---------------------------------------------------------------------------
-# 2) PDF sefer bildirimleri yükleme
-# ---------------------------------------------------------------------------
-st.subheader("2️⃣ Sefer Bildirimi PDF'leri")
-pdf_dosyalari = st.file_uploader(
-    "Bir veya birden fazla sefer bildirimi PDF'i yükleyin",
-    type=["pdf"],
-    accept_multiple_files=True,
-)
+with col_tasima:
+    st.subheader("3️⃣ Taşıma Türü")
+    tasima_turu = st.radio(
+        "Taşıma türünü seçin",
+        options=["ADR-AMBALAJLI", "ADR-TANK", "ADR-DÖKME"],
+        format_func=lambda v: {"ADR-AMBALAJLI": "Ambalajlı", "ADR-TANK": "Tank", "ADR-DÖKME": "Dökme"}[v],
+        horizontal=True,
+    )
+    st.caption("UN 1202/1203 seçimden bağımsız olarak her zaman ADR-TANK olarak yazılır.")
 
-# ---------------------------------------------------------------------------
-# 3) Taşıma türü
-# ---------------------------------------------------------------------------
-st.subheader("3️⃣ Taşıma Türü")
-tasima_turu = st.radio(
-    "Taşıma türünü seçin",
-    options=["ADR-AMBALAJLI", "ADR-TANK", "ADR-DÖKME"],
-    format_func=lambda v: {"ADR-AMBALAJLI": "Ambalajlı", "ADR-TANK": "Tank", "ADR-DÖKME": "Dökme"}[v],
-    horizontal=True,
-)
-st.caption("UN 1202/1203 seçimden bağımsız olarak her zaman ADR-TANK olarak yazılır.")
+with col_docx:
+    st.subheader("4️⃣ Boşaltma Kontrol Dökümanı")
+    docx_uret = st.checkbox(
+        "Her sefer için Boşaltma Kontrol Dökümanı oluştur",
+        value=False,
+        disabled=not _DOCX_DESTEGI,
+    )
+    if not _DOCX_DESTEGI:
+        st.warning("python-docx kurulu değil, kontrol dökümanı üretimi devre dışı.")
 
-# ---------------------------------------------------------------------------
-# 4) Boşaltma Kontrol Dökümanı seçeneği
-# ---------------------------------------------------------------------------
-st.subheader("4️⃣ Boşaltma Kontrol Dökümanı")
-docx_uret = st.checkbox(
-    "Her sefer için Boşaltma Kontrol Dökümanı oluştur",
-    value=False,
-    disabled=not _DOCX_DESTEGI,
-)
-if not _DOCX_DESTEGI:
-    st.warning("python-docx kurulu değil, kontrol dökümanı üretimi devre dışı.")
-
-bosaltan_adi = ""
-sofor_adi = ""
 plaka_ek_tarihler: dict[str, dict] = {}
 plaka_muayene_tarihleri: dict[str, str] = {}
 
-if docx_uret and _DOCX_DESTEGI:
-    col1, col2 = st.columns(2)
-    with col1:
-        bosaltan_adi = st.text_input("Boşaltan Adı Soyadı")
-    with col2:
-        sofor_adi = st.text_input("Taşıyıcı/Şoför Adı Soyadı")
+if docx_uret and _DOCX_DESTEGI and pdf_dosyalari:
+    st.divider()
+    st.subheader("🗓️ Araç Muayene ve Geçerlilik Tarihleri")
+    st.caption("Her plaka için ayrı ayrı doldurun (GG.AA.YYYY formatında).")
 
-    # PDF'lerden plaka bilgilerini önceden çıkarıp her plaka için tarih formu göster
-    if pdf_dosyalari:
-        st.markdown("**Araç Muayene ve Geçerlilik Tarihleri**")
-        st.caption("Her plaka için ayrı ayrı doldurun (GG.AA.YYYY formatında).")
+    gecici_plakalar = []
+    for pf in pdf_dosyalari:
+        try:
+            tmp_path = CALISMA_KLASORU / pf.name
+            tmp_path.write_bytes(pf.getvalue())
+            _, plaka = extract_pdf_data(tmp_path)
+            if plaka and plaka not in [p[0] for p in gecici_plakalar]:
+                gecici_plakalar.append((plaka, pf.name))
+        except Exception:
+            pass
 
-        gecici_plakalar = []
-        for pf in pdf_dosyalari:
-            try:
-                tmp_path = CALISMA_KLASORU / pf.name
-                tmp_path.write_bytes(pf.getvalue())
-                _, plaka = extract_pdf_data(tmp_path)
-                if plaka and plaka not in [p[0] for p in gecici_plakalar]:
-                    gecici_plakalar.append((plaka, pf.name))
-            except Exception:
-                pass
-
-        for plaka, pdf_adi in gecici_plakalar:
-            with st.expander(f"🚛 Plaka: {plaka}  ({pdf_adi})", expanded=True):
-                c1, c2 = st.columns(2)
-                with c1:
+    # Plaka kartlarını 2'li grid halinde yan yana diz
+    for i in range(0, len(gecici_plakalar), 2):
+        cift = gecici_plakalar[i:i + 2]
+        grid_cols = st.columns(2)
+        for col, (plaka, pdf_adi) in zip(grid_cols, cift):
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"**🚛 Plaka: {plaka}**")
+                    st.caption(pdf_adi)
                     ara_muayene = st.text_input("Ara Muayene Tarihi", key=f"ara_{plaka}", placeholder="GG.AA.YYYY")
                     yangin_tup = st.text_input("Yangın Tüpü Geçerlilik Tarihi", key=f"yangin_{plaka}", placeholder="GG.AA.YYYY")
                     tmfb = st.text_input("TMFB Geçerlilik Tarihi", key=f"tmfb_{plaka}", placeholder="GG.AA.YYYY")
-                with c2:
                     periyodik = st.text_input("Periyodik Muayene Tarihi", key=f"periyodik_{plaka}", placeholder="GG.AA.YYYY")
                     adr_uygunluk = st.text_input("ADR Uygunluk Belgesi Geçerlilik Tarihi", key=f"adr_{plaka}", placeholder="GG.AA.YYYY")
 
@@ -175,7 +178,6 @@ if calistir:
         st.error("Lütfen en az bir PDF dosyası yükleyin.")
     else:
         with st.spinner("İşleniyor…"):
-            # Yüklenen dosyaları geçici klasöre yaz
             excel_yolu = CALISMA_KLASORU / "girdi.xlsx"
             excel_yolu.write_bytes(excel_dosya.getvalue())
 
@@ -202,7 +204,7 @@ if calistir:
                 docx_cikti_klasor=docx_cikti_klasoru,
                 bosaltan_adi=bosaltan_adi,
                 sofor_adi=sofor_adi,
-                docx_pdf_donustur=True,  # Web sürümünde PDF'e çevirmeyi dene
+                docx_pdf_donustur=True,
                 logo_bytes=st.session_state.logo_bytes,
             )
 
@@ -229,54 +231,56 @@ if st.session_state.sonuc:
     with st.expander("İşlem Günlüğü", expanded=False):
         st.code("\n".join(st.session_state.log_mesajlari), language=None)
 
-    # ---- Excel indirme ----
-    if r["eklenen"] > 0:
-        excel_yolu = st.session_state.cikti_excel_yolu
-        st.markdown("#### 📊 Excel Taşıma Kontrol Listesi")
-        if r.get("uretilen_dosyalar"):
-            st.info(
-                "💡 Excel'deki Sefer No hücrelerine tıklanabilir köprüler eklendi. "
-                "Köprülerin çalışması için indirdiğiniz Kontrol Dökümanı PDF/Word "
-                "dosyalarını, Excel dosyasıyla **aynı klasöre** kaydedin."
-            )
-        st.download_button(
-            "⬇️ Excel'i İndir",
-            data=excel_yolu.read_bytes(),
-            file_name=excel_yolu.name,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-        )
+    sonuc_col_excel, sonuc_col_docx = st.columns(2)
 
-    # ---- DOCX/PDF Kontrol Dökümanları indirme ----
+    if r["eklenen"] > 0:
+        with sonuc_col_excel:
+            excel_yolu = st.session_state.cikti_excel_yolu
+            st.markdown("#### 📊 Excel Taşıma Kontrol Listesi")
+            if r.get("uretilen_dosyalar"):
+                st.info(
+                    "💡 Excel'deki Sefer No hücrelerine tıklanabilir köprüler eklendi. "
+                    "Köprülerin çalışması için indirdiğiniz Kontrol Dökümanı PDF/Word "
+                    "dosyalarını, Excel dosyasıyla **aynı klasöre** kaydedin."
+                )
+            st.download_button(
+                "⬇️ Excel'i İndir",
+                data=excel_yolu.read_bytes(),
+                file_name=excel_yolu.name,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+
     uretilen = r.get("uretilen_dosyalar") or []
     if uretilen:
-        st.markdown("#### 📋 Boşaltma Kontrol Dökümanları")
-        for dosya in uretilen:
-            sn = dosya["sefer_no"]
-            docx_yolu: Path = dosya["docx"]
-            pdf_yolu: Path = dosya["pdf"]
+        with sonuc_col_docx:
+            st.markdown("#### 📋 Boşaltma Kontrol Dökümanları")
+            for dosya in uretilen:
+                sn = dosya["sefer_no"]
+                docx_yolu: Path = dosya["docx"]
+                pdf_yolu: Path = dosya["pdf"]
 
-            st.markdown(f"**Sefer No: {sn}**")
-            dc1, dc2 = st.columns(2)
-            with dc1:
-                if pdf_yolu and pdf_yolu.is_file():
-                    st.download_button(
-                        f"⬇️ PDF olarak indir",
-                        data=pdf_yolu.read_bytes(),
-                        file_name=pdf_yolu.name,
-                        mime="application/pdf",
-                        key=f"pdf_{sn}",
-                        use_container_width=True,
-                    )
-                else:
-                    st.caption("PDF dönüşümü yapılamadı")
-            with dc2:
-                if docx_yolu and docx_yolu.is_file():
-                    st.download_button(
-                        f"⬇️ Word (.docx) olarak indir",
-                        data=docx_yolu.read_bytes(),
-                        file_name=docx_yolu.name,
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key=f"docx_{sn}",
-                        use_container_width=True,
-                    )
+                st.markdown(f"**Sefer No: {sn}**")
+                dc1, dc2 = st.columns(2)
+                with dc1:
+                    if pdf_yolu and pdf_yolu.is_file():
+                        st.download_button(
+                            "⬇️ PDF",
+                            data=pdf_yolu.read_bytes(),
+                            file_name=pdf_yolu.name,
+                            mime="application/pdf",
+                            key=f"pdf_{sn}",
+                            use_container_width=True,
+                        )
+                    else:
+                        st.caption("PDF dönüşümü yapılamadı")
+                with dc2:
+                    if docx_yolu and docx_yolu.is_file():
+                        st.download_button(
+                            "⬇️ Word",
+                            data=docx_yolu.read_bytes(),
+                            file_name=docx_yolu.name,
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            key=f"docx_{sn}",
+                            use_container_width=True,
+                        )
