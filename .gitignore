@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .DS_Store
-*.xlsx
 *.pdf
 .streamlit/secrets.toml
+# Üretilen xlsx çıktıları ignore, ama şablon dosyası dahil edilsin
+!bos_sablon.xlsx
