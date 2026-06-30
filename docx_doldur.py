@@ -38,14 +38,20 @@ from docx.table import _Cell
 # ---------------------------------------------------------------------------
 # Üst tablo (Table 0): Evet / Hayır / İlgili Değil seçim mantığı
 # ---------------------------------------------------------------------------
-# Madde 1 -> "Evet" işaretlenecek
-# Madde 2 -> "İlgili Değil" işaretlenecek
-# Madde 3 -> "İlgili Değil" işaretlenecek
-UST_SECIMLER = {
-    0: "Evet",
-    1: "İlgili Değil",
-    2: "İlgili Değil",
-}
+# Soru 1: Ambalajlı taşıma için boş turuncu plaka var mı?
+#   -> ADR-AMBALAJLI → Evet   |   ADR-TANK / ADR-DÖKME → İlgili Değil
+# Soru 2: Tank/Dökme taşıma için yazılı turuncu plaka + tehlike ikaz işareti var mı?
+#   -> ADR-AMBALAJLI → İlgili Değil   |   ADR-TANK / ADR-DÖKME → Evet
+# Soru 3: Konteynır taşıma → her zaman İlgili Değil
+
+def _ust_secimler(tasima_turu: str) -> dict:
+    """Taşıma türüne göre üst tablodaki 3 sorunun seçimini döndürür."""
+    tank_veya_dokme = tasima_turu in ("ADR-TANK", "ADR-DÖKME")
+    return {
+        0: "İlgili Değil" if tank_veya_dokme else "Evet",       # Soru 1: Ambalajlı plaka
+        1: "Evet" if tank_veya_dokme else "İlgili Değil",       # Soru 2: Tank/Dökme plaka
+        2: "İlgili Değil",                                       # Soru 3: Konteynır (her zaman)
+    }
 
 # Sol tablo (Alıcı-Dolduran-Boşaltan) - satır indeksleri (Table 2 satır no -> 1'den başlar)
 # 2 ve 7 numaralı maddeler zaten "İ.D." / "İ.D" sabit yazılı, dokunulmuyor.
@@ -156,6 +162,7 @@ def kontrol_dokumani_olustur(
     bosaltan_adi: str = "",
     sofor_adi: str = "",
     logo_bytes: Optional[bytes] = None,
+    tasima_turu: str = "ADR-AMBALAJLI",
 ) -> Path:
     """Şablon .docx dosyasını doldurup yeni bir dosya olarak kaydeder.
 
@@ -176,7 +183,8 @@ def kontrol_dokumani_olustur(
 
     # ---- Tablo 0: Üst Evet/Hayır/İlgili Değil seçimleri ----
     t0 = d.tables[0]
-    for row_idx, secim in UST_SECIMLER.items():
+    ust_secimler = _ust_secimler(tasima_turu)
+    for row_idx, secim in ust_secimler.items():
         if row_idx >= len(t0.rows):
             continue
         cell = t0.rows[row_idx].cells[0]

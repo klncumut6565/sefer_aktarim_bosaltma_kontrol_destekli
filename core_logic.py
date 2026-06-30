@@ -439,6 +439,7 @@ def process_pdfs(excel_path: Path, pdf_paths: list[Path], output_path: Path, log
                     bosaltan_adi=bosaltan_adi,
                     sofor_adi=sofor_adi,
                     logo_bytes=logo_bytes,
+                    tasima_turu=ilk.tasima_turu,
                 )
                 docx_uretilen += 1
                 emit(f"  📋 Kontrol dökümanı oluşturuldu → {docx_yolu.name}")
