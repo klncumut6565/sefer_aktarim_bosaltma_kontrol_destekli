@@ -116,11 +116,19 @@ class Yuk:
         }
 
     def _default_muafiyet(self) -> str:
-        """UN No'ya göre varsayılan muafiyet metni"""
+        """UN No ve miktara göre muafiyet metni.
+        ADR 1.1.3.6 taşıma kategorisi limit değerleri:
+          UN 1203 (Taşıma Kategorisi 2): sınır 333 (Lt/Kg)
+          UN 1202 (Taşıma Kategorisi 3): sınır 1000 (Lt/Kg)
+        Miktar sınır değere eşit veya altındaysa EVET (muafiyet kapsamında),
+        sınırı aşıyorsa HAYIR (muafiyet kapsamı dışında) yazılır.
+        """
         if self.un_no == "1203":
-            return "EVET\n-TAŞIMA KATEGORİSİ-2\nSINIR 333"
+            kapsam = "EVET" if self.miktar <= 333 else "HAYIR"
+            return f"{kapsam}\n-TAŞIMA KATEGORİSİ-2\nSINIR 333"
         elif self.un_no == "1202":
-            return "EVET\n-TAŞIMA KATEGORİSİ-3\nSINIR 1000"
+            kapsam = "EVET" if self.miktar <= 1000 else "HAYIR"
+            return f"{kapsam}\n-TAŞIMA KATEGORİSİ-3\nSINIR 1000"
         return ""
 
 
@@ -194,11 +202,15 @@ def extract_pdf_data(pdf_path: Path, tasima_turu_secimi: str = "ADR-AMBALAJLI") 
             mik = int(float(mik_str.replace(".", "").replace(",", ".")))
         except ValueError:
             mik = 0
-        # Muafiyet metni
+        # Muafiyet metni — ADR 1.1.3.6 taşıma kategorisi limit değerleri.
+        # Miktar sınır değere eşit veya altındaysa EVET (muafiyet kapsamında),
+        # sınırı aşıyorsa HAYIR (muafiyet kapsamı dışında).
         if un_no == "1203":
-            muafiyet = "EVET\n-TAŞIMA KATEGORİSİ-2\nSINIR 333"
+            kapsam = "EVET" if mik <= 333 else "HAYIR"
+            muafiyet = f"{kapsam}\n-TAŞIMA KATEGORİSİ-2\nSINIR 333"
         elif un_no == "1202":
-            muafiyet = "EVET\n-TAŞIMA KATEGORİSİ-3\nSINIR 1000"
+            kapsam = "EVET" if mik <= 1000 else "HAYIR"
+            muafiyet = f"{kapsam}\n-TAŞIMA KATEGORİSİ-3\nSINIR 1000"
         else:
             muafiyet = ""
         # Taşıma türü: UN 1202/1203 her zaman ADR-TANK, diğerleri arayüzden seçilen tür
