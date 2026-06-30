@@ -32,15 +32,12 @@ st.caption("PDF sefer bildirimlerini Excel kontrol listesine aktarın ve Boşalt
 st.markdown(
     """
     <style>
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(div.docx-vurgu-isaret) {
+    div.st-key-docx_karti,
+    div.st-key-imza_karti {
         background-color: #FFF4D6;
         border: 1px solid #F0C36D !important;
         border-radius: 10px;
-    }
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(div.imza-vurgu-isaret) {
-        background-color: #FFF4D6;
-        border: 1px solid #F0C36D !important;
-        border-radius: 10px;
+        padding: 0.5rem;
     }
     </style>
     """,
@@ -90,8 +87,7 @@ with st.sidebar:
     docx_secili = st.session_state.get("docx_uret_checkbox", False)
 
     if docx_secili:
-        with st.container(border=True):
-            st.markdown('<div class="imza-vurgu-isaret"></div>', unsafe_allow_html=True)
+        with st.container(border=True, key="imza_karti"):
             st.caption("📋 Boşaltma Kontrol Dökümanı için bu bilgileri doldurun:")
             bosaltan_adi = st.text_input("Boşaltan Adı Soyadı")
             sofor_adi = st.text_input("Taşıyıcı/Şoför Adı Soyadı")
@@ -143,8 +139,7 @@ with col_tasima:
 
 with col_docx:
     st.subheader("4️⃣ Boşaltma Kontrol Dökümanı")
-    with st.container(border=True):
-        st.markdown('<div class="docx-vurgu-isaret"></div>', unsafe_allow_html=True)
+    with st.container(border=True, key="docx_karti"):
         docx_uret = st.checkbox(
             "**📋 Her sefer için Boşaltma Kontrol Dökümanı oluştur**",
             value=False,
