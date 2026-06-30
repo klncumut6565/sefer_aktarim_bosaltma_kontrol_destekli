@@ -121,6 +121,25 @@ def _append_isim_to_cell(cell: _Cell, isim: str) -> None:
         p.add_run(f" {isim}")
 
 
+def _logo_degistir(document: docx.Document, logo_bytes: bytes) -> bool:
+    """Header'daki tek logo resminin ham byte içeriğini (blob) değiştirir.
+    Resmin boyutu/konumu (hücreye göre otomatik ölçeklenir) şablonda
+    tanımlı kaldığı için burada sadece içerik değiştirilir.
+    Birden fazla section/header varsa hepsinde dener. Başarılıysa True döner."""
+    degisti = False
+    for section in document.sections:
+        header = section.header
+        try:
+            rels = header.part.rels
+        except AttributeError:
+            continue
+        for rel in rels.values():
+            if rel.reltype == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image":
+                rel.target_part._blob = logo_bytes
+                degisti = True
+    return degisti
+
+
 def kontrol_dokumani_olustur(
     sablon_path: str | Path,
     cikti_path: str | Path,
@@ -136,6 +155,7 @@ def kontrol_dokumani_olustur(
     periyodik_muayene_tarihi: str = "",
     bosaltan_adi: str = "",
     sofor_adi: str = "",
+    logo_bytes: Optional[bytes] = None,
 ) -> Path:
     """Şablon .docx dosyasını doldurup yeni bir dosya olarak kaydeder.
 
@@ -231,6 +251,10 @@ def kontrol_dokumani_olustur(
             else:
                 degerler = [periyodik_muayene_tarihi]
         _replace_tarih_placeholder(t2.rows[7].cells[1], degerler)
+
+    # ---- Logo (header'daki tek resim) ----
+    if logo_bytes:
+        _logo_degistir(d, logo_bytes)
 
     # ---- Footer: Boşaltan / Taşıyıcı-Şoför Adı Soyadı ----
     if bosaltan_adi or sofor_adi:

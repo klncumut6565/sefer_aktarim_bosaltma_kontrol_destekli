@@ -11,6 +11,7 @@ Gereksinimler:
 
 from __future__ import annotations
 
+import io
 import logging
 import os
 import re
@@ -23,6 +24,7 @@ from typing import Any, Optional
 
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Border, Alignment, Protection
+from openpyxl.drawing.image import Image as XLImage
 
 try:
     from docx_doldur import kontrol_dokumani_olustur
@@ -275,6 +277,18 @@ def _zebra_map(yukler):
             cm[y.sefer_no] = ZEBRA_COLORS[idx % len(ZEBRA_COLORS)]; idx += 1
     return cm
 
+def _excel_logo_ekle(ws, logo_bytes: bytes) -> None:
+    """Excel'in sol üst köşesindeki (A1:C4 birleşik) logo alanına, verilen
+    logo görselini ekler/değiştirir. Önceki logo varsa kaldırılır."""
+    # Önceki logo(lar) varsa kaldır (yeniden aktarımlarda üst üste binmesin)
+    if hasattr(ws, "_images"):
+        ws._images = [img for img in ws._images if getattr(img, "anchor", None) != "A1"]
+    img = XLImage(io.BytesIO(logo_bytes))
+    img.width = 140
+    img.height = 70
+    ws.add_image(img, "A1")
+
+
 def _rewrite(ws, yukler, style):
     for row in range(ws.max_row, DATA_START_ROW - 1, -1):
         ws.delete_rows(row)
@@ -339,7 +353,8 @@ def process_pdfs(excel_path: Path, pdf_paths: list[Path], output_path: Path, log
                                    docx_cikti_klasor: Path = None,
                                    bosaltan_adi: str = "",
                                    sofor_adi: str = "",
-                                   docx_pdf_donustur: bool = False) -> dict:
+                                   docx_pdf_donustur: bool = False,
+                                   logo_bytes: Optional[bytes] = None) -> dict:
     """
     ek_tarihler: plaka -> {
         "yangin_tup": "GG.AA.YYYY", "tmfb": "...", "adr_uygunluk": "...",
@@ -411,6 +426,7 @@ def process_pdfs(excel_path: Path, pdf_paths: list[Path], output_path: Path, log
                     periyodik_muayene_tarihi=ek.get("periyodik_muayene", ""),
                     bosaltan_adi=bosaltan_adi,
                     sofor_adi=sofor_adi,
+                    logo_bytes=logo_bytes,
                 )
                 docx_uretilen += 1
                 emit(f"  📋 Kontrol dökümanı oluşturuldu → {docx_yolu.name}")
@@ -446,6 +462,13 @@ def process_pdfs(excel_path: Path, pdf_paths: list[Path], output_path: Path, log
 
     tum = sorted(mevcut + yeni, key=lambda y: y.sort_key())
     _rewrite(ws, tum, style)
+
+    if logo_bytes:
+        try:
+            _excel_logo_ekle(ws, logo_bytes)
+        except Exception as exc:
+            emit(f"  ⚠ Excel'e logo eklenemedi: {exc}")
+
     wb.save(output_path)
     emit(f"✅ Kaydedildi → {output_path.name}  ({eklenen} yeni sefer, {len(tum)} toplam satır)")
     return {"eklenen": eklenen, "atlanan": atlanan, "toplam": len(tum),

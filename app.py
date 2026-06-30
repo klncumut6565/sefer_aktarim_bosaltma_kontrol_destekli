@@ -37,8 +37,36 @@ if "sonuc" not in st.session_state:
     st.session_state.sonuc = None
 if "log_mesajlari" not in st.session_state:
     st.session_state.log_mesajlari = []
+if "logo_bytes" not in st.session_state:
+    st.session_state.logo_bytes = None
 
 CALISMA_KLASORU = Path(st.session_state.calisma_klasoru)
+
+# ---------------------------------------------------------------------------
+# 0) Firma Logosu (isteğe bağlı, oturum boyunca hatırlanır)
+# ---------------------------------------------------------------------------
+st.subheader("🏢 Firma Logosu")
+logo_dosya = st.file_uploader(
+    "Logonuzu yükleyin (Excel'in ve Kontrol Dökümanının sol üst köşesine eklenir)",
+    type=["png", "jpg", "jpeg"],
+    key="logo_uploader",
+)
+if logo_dosya is not None:
+    st.session_state.logo_bytes = logo_dosya.getvalue()
+
+if st.session_state.logo_bytes:
+    c1, c2 = st.columns([1, 4])
+    with c1:
+        st.image(st.session_state.logo_bytes, width=100)
+    with c2:
+        st.caption("Logo yüklendi, bu oturumdaki tüm aktarımlarda kullanılacak.")
+        if st.button("🗑️ Logoyu Kaldır"):
+            st.session_state.logo_bytes = None
+            st.rerun()
+else:
+    st.caption("Logo yüklenmezse Excel/Kontrol Dökümanı varsayılan haliyle (logosuz) oluşturulur.")
+
+st.divider()
 
 # ---------------------------------------------------------------------------
 # 1) Excel şablonu yükleme
@@ -175,6 +203,7 @@ if calistir:
                 bosaltan_adi=bosaltan_adi,
                 sofor_adi=sofor_adi,
                 docx_pdf_donustur=True,  # Web sürümünde PDF'e çevirmeyi dene
+                logo_bytes=st.session_state.logo_bytes,
             )
 
             st.session_state.sonuc = sonuc
