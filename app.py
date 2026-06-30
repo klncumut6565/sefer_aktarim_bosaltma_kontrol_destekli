@@ -112,13 +112,18 @@ with col_tasima:
 
 with col_docx:
     st.subheader("4️⃣ Boşaltma Kontrol Dökümanı")
-    docx_uret = st.checkbox(
-        "Her sefer için Boşaltma Kontrol Dökümanı oluştur",
-        value=False,
-        disabled=not _DOCX_DESTEGI,
-    )
-    if not _DOCX_DESTEGI:
-        st.warning("python-docx kurulu değil, kontrol dökümanı üretimi devre dışı.")
+    with st.container(border=True):
+        docx_uret = st.checkbox(
+            "**📋 Her sefer için Boşaltma Kontrol Dökümanı oluştur**",
+            value=False,
+            disabled=not _DOCX_DESTEGI,
+        )
+        if docx_uret and _DOCX_DESTEGI:
+            st.success("✅ Aktif — her sefer için ayrıca Kontrol Dökümanı (PDF/Word) üretilecek.")
+        elif not _DOCX_DESTEGI:
+            st.warning("python-docx kurulu değil, kontrol dökümanı üretimi devre dışı.")
+        else:
+            st.caption("İşaretlerseniz, aşağıda her plaka için tarih bilgileri istenecektir.")
 
 plaka_ek_tarihler: dict[str, dict] = {}
 plaka_muayene_tarihleri: dict[str, str] = {}
