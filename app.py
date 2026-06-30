@@ -28,11 +28,16 @@ st.set_page_config(
 st.title("🚚 Sefer Aktarım")
 st.caption("PDF sefer bildirimlerini Excel kontrol listesine aktarın ve Boşaltma Kontrol Dökümanı oluşturun.")
 
-# Boşaltma Kontrol Dökümanı kartını vurgulamak için özel stil
+# Boşaltma Kontrol Dökümanı kartını ve imza kartını vurgulamak için özel stil
 st.markdown(
     """
     <style>
     div[data-testid="stVerticalBlockBorderWrapper"]:has(div.docx-vurgu-isaret) {
+        background-color: #FFF4D6;
+        border: 1px solid #F0C36D !important;
+        border-radius: 10px;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(div.imza-vurgu-isaret) {
         background-color: #FFF4D6;
         border: 1px solid #F0C36D !important;
         border-radius: 10px;
@@ -82,9 +87,21 @@ with st.sidebar:
     st.divider()
 
     st.subheader("👤 İmza Bilgileri")
-    bosaltan_adi = st.text_input("Boşaltan Adı Soyadı")
-    sofor_adi = st.text_input("Taşıyıcı/Şoför Adı Soyadı")
-    st.caption("Bu bilgiler, oluşturulan tüm Kontrol Dökümanlarında kullanılır.")
+    docx_secili = st.session_state.get("docx_uret_checkbox", False)
+
+    if docx_secili:
+        with st.container(border=True):
+            st.markdown('<div class="imza-vurgu-isaret"></div>', unsafe_allow_html=True)
+            st.caption("📋 Boşaltma Kontrol Dökümanı için bu bilgileri doldurun:")
+            bosaltan_adi = st.text_input("Boşaltan Adı Soyadı")
+            sofor_adi = st.text_input("Taşıyıcı/Şoför Adı Soyadı")
+    else:
+        bosaltan_adi = ""
+        sofor_adi = ""
+        st.caption(
+            "ℹ️ Bu alanlar, sağdaki **'Boşaltma Kontrol Dökümanı oluştur'** "
+            "kutucuğunu işaretlediğinizde burada aktif olacaktır."
+        )
 
 # ---------------------------------------------------------------------------
 # ANA EKRAN — 1) Excel + 2) PDF yükleme (yan yana)
@@ -132,6 +149,7 @@ with col_docx:
             "**📋 Her sefer için Boşaltma Kontrol Dökümanı oluştur**",
             value=False,
             disabled=not _DOCX_DESTEGI,
+            key="docx_uret_checkbox",
         )
         if docx_uret and _DOCX_DESTEGI:
             st.success("✅ Aktif — her sefer için ayrıca Kontrol Dökümanı (PDF/Word) üretilecek.")
