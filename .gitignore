@@ -5,3 +5,4 @@ __pycache__/
 .streamlit/secrets.toml
 # Üretilen xlsx çıktıları ignore, ama şablon dosyası dahil edilsin
 !bos_sablon.xlsx
+.ai_cache/
