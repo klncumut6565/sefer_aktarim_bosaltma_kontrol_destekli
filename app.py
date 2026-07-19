@@ -69,8 +69,9 @@ CALISMA_KLASORU = Path(st.session_state.calisma_klasoru)
 with st.sidebar:
     st.header("🏢 Firma Bilgileri")
 
-    # Logo
-    logo_dosya = st.file_uploader("Firma Logosu", type=["png","jpg","jpeg"],
+    # 1️⃣ Logo
+    st.markdown("**1️⃣ Firma Logosu**")
+    logo_dosya = st.file_uploader("Logo", type=["png","jpg","jpeg"],
         key="logo_uploader", label_visibility="collapsed",
         help="Excel ve Kontrol Dökümanlarına eklenir.")
     if logo_dosya:
@@ -89,25 +90,38 @@ with st.sidebar:
     st.divider()
     mod = st.session_state.get("mod")
 
-    # --- BOSALTMA MODÜ ---
+    # 2️⃣ Gönderici Firma (sadece gönderim modülünde)
+    st.markdown("**2️⃣ Gönderici Firma**")
+    if mod == "gonderim":
+        gonderici_firma = st.text_input("Firma Unvanı", key="gonderici_firma",
+                                         placeholder="Firma adını girin")
+    else:
+        gonderici_firma = ""
+        st.caption("Gönderim modu aktif olduğunda bu alan doldurulur.")
+
+    st.divider()
+
+    # 3️⃣ Boşaltma Kontrol Formu İmza (sadece boşaltma modülünde)
+    st.markdown("**3️⃣ Boşaltma Kontrol Formu**")
     if mod == "bosaltma":
         docx_secili = st.session_state.get("docx_uret_checkbox", False)
         if docx_secili:
-            st.markdown("**4️⃣ Boşaltma Kontrol Formu**")
             with st.container(border=True, key="imza_karti"):
+                st.caption("📋 Boşaltma Kontrol Dökümanı için doldurun:")
                 bosaltan_adi = st.text_input("Boşaltan", key="bosaltan_adi", placeholder="Ad Soyad")
                 sofor_adi = st.text_input("Şoför", key="sofor_adi", placeholder="Ad Soyad")
         else:
             bosaltan_adi = sofor_adi = ""
-            st.caption("ℹ️ 'Boşaltma Kontrol Dökümanı' kutucuğunu işaretleyin → imza alanları aktif olur.")
+            st.caption("'Boşaltma Kontrol Dökümanı oluştur' kutucuğunu işaretleyin → alanlar aktif olur.")
+    else:
+        bosaltan_adi = sofor_adi = ""
+        st.caption("Boşaltma modu aktif olduğunda bu alan doldurulur.")
 
-    # --- GÖNDERİM MODÜ ---
-    elif mod == "gonderim":
-        st.markdown("**3️⃣ Gönderici Firma**")
-        gonderici_firma = st.text_input("Firma Unvanı", key="gonderici_firma",
-                                         placeholder="Firma adını girin")
+    st.divider()
 
-        st.markdown("**5️⃣ Gönderim Kontrol Formu İmza**")
+    # 4️⃣ Gönderim Kontrol Formu İmza (sadece gönderim modülünde)
+    st.markdown("**4️⃣ Gönderim Kontrol Formu**")
+    if mod == "gonderim":
         gonderim_docx_secili = st.session_state.get("gonderim_docx_uret", False)
         if gonderim_docx_secili:
             with st.container(border=True, key="gonderim_karti"):
@@ -118,11 +132,10 @@ with st.sidebar:
                                              placeholder="Ad Soyad")
         else:
             gonderici_adi = sofor_adi_g = ""
-            st.caption("ℹ️ **'Gönderim Kontrol Dökümanı oluştur'** kutucuğunu işaretlediğinizde bu alanlar aktif olur.")
+            st.caption("'Gönderim Kontrol Dökümanı oluştur' kutucuğunu işaretleyin → alanlar aktif olur.")
     else:
-        st.caption("Dosya yüklendiğinde bu bölüm aktif olur.")
-        bosaltan_adi = sofor_adi = ""
-        gonderici_firma = gonderici_adi = sofor_adi_g = ""
+        gonderici_adi = sofor_adi_g = ""
+        st.caption("Gönderim modu aktif olduğunda bu alan doldurulur.")
 
 # ---------------------------------------------------------------------------
 # BAŞLIK
