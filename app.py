@@ -88,54 +88,41 @@ with st.sidebar:
         st.caption("📎 Logo yükleyin (isteğe bağlı)")
 
     st.divider()
-    mod = st.session_state.get("mod")
 
-    # 2️⃣ Gönderici Firma (sadece gönderim modülünde)
+    # 2️⃣ Gönderici Firma
     st.markdown("**2️⃣ Gönderici Firma**")
-    if mod == "gonderim":
-        gonderici_firma = st.text_input("Firma Unvanı", key="gonderici_firma",
-                                         placeholder="Firma adını girin")
-    else:
-        gonderici_firma = ""
-        st.caption("Gönderim modu aktif olduğunda bu alan doldurulur.")
+    gonderici_firma = st.text_input("Firma Unvanı", key="gonderici_firma",
+                                     placeholder="Firma adını girin")
 
     st.divider()
 
-    # 3️⃣ Boşaltma Kontrol Formu İmza (sadece boşaltma modülünde)
+    # 3️⃣ Boşaltma Kontrol Formu
     st.markdown("**3️⃣ Boşaltma Kontrol Formu**")
-    if mod == "bosaltma":
-        docx_secili = st.session_state.get("docx_uret_checkbox", False)
-        if docx_secili:
-            with st.container(border=True, key="imza_karti"):
-                st.caption("📋 Boşaltma Kontrol Dökümanı için doldurun:")
-                bosaltan_adi = st.text_input("Boşaltan", key="bosaltan_adi", placeholder="Ad Soyad")
-                sofor_adi = st.text_input("Şoför", key="sofor_adi", placeholder="Ad Soyad")
-        else:
-            bosaltan_adi = sofor_adi = ""
-            st.caption("'Boşaltma Kontrol Dökümanı oluştur' kutucuğunu işaretleyin → alanlar aktif olur.")
+    docx_secili = st.session_state.get("docx_uret_checkbox", False)
+    if docx_secili:
+        with st.container(border=True, key="imza_karti"):
+            st.caption("📋 Boşaltma Kontrol Dökümanı için doldurun:")
+            bosaltan_adi = st.text_input("Boşaltan", key="bosaltan_adi", placeholder="Ad Soyad")
+            sofor_adi = st.text_input("Şoför", key="sofor_adi", placeholder="Ad Soyad")
     else:
         bosaltan_adi = sofor_adi = ""
-        st.caption("Boşaltma modu aktif olduğunda bu alan doldurulur.")
+        st.caption("Ana ekranda 'Boşaltma Kontrol Dökümanı oluştur' kutucuğunu işaretleyin.")
 
     st.divider()
 
-    # 4️⃣ Gönderim Kontrol Formu İmza (sadece gönderim modülünde)
+    # 4️⃣ Gönderim Kontrol Formu
     st.markdown("**4️⃣ Gönderim Kontrol Formu**")
-    if mod == "gonderim":
-        gonderim_docx_secili = st.session_state.get("gonderim_docx_uret", False)
-        if gonderim_docx_secili:
-            with st.container(border=True, key="gonderim_karti"):
-                st.caption("📋 Gönderim Kontrol Dökümanı için doldurun:")
-                gonderici_adi = st.text_input("Gönderen", key="gonderici_adi",
-                                               placeholder="Ad Soyad")
-                sofor_adi_g = st.text_input("Şoför", key="sofor_adi_g",
-                                             placeholder="Ad Soyad")
-        else:
-            gonderici_adi = sofor_adi_g = ""
-            st.caption("'Gönderim Kontrol Dökümanı oluştur' kutucuğunu işaretleyin → alanlar aktif olur.")
+    gonderim_docx_secili = st.session_state.get("gonderim_docx_uret", False)
+    if gonderim_docx_secili:
+        with st.container(border=True, key="gonderim_karti"):
+            st.caption("📋 Gönderim Kontrol Dökümanı için doldurun:")
+            gonderici_adi = st.text_input("Gönderen", key="gonderici_adi", placeholder="Ad Soyad")
+            sofor_adi_g = st.text_input("Şoför", key="sofor_adi_g", placeholder="Ad Soyad")
     else:
         gonderici_adi = sofor_adi_g = ""
-        st.caption("Gönderim modu aktif olduğunda bu alan doldurulur.")
+        st.caption("Ana ekranda 'Gönderim Kontrol Dökümanı oluştur' kutucuğunu işaretleyin.")
+
+    mod = st.session_state.get("mod")
 
 # ---------------------------------------------------------------------------
 # BAŞLIK
