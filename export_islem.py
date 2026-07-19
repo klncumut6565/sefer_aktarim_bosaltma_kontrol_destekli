@@ -110,17 +110,32 @@ def _parse_miktar(deger) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Muafiyet hesaplama (ADR 1.1.3.6)
+# ADR 1.1.3.6 Muafiyet Hesaplama (Puan Sistemi)
 # ---------------------------------------------------------------------------
-KATEGORI_LIMIT = {1: 20, 2: 333, 3: 1000, 4: float('inf')}
+TC_PUANLARI = {1: 50, 2: 3, 3: 1, 4: 0}
+MAX_PUAN = 1000
 
 
-def _muafiyet_metni(tasima_kategorisi: int, miktar_kg: float) -> str:
-    limit = KATEGORI_LIMIT.get(tasima_kategorisi, 1000)
-    kapsam = 'EVET' if miktar_kg <= limit else 'HAYIR'
-    if limit == float('inf'):
-        return f'{kapsam}\n-TAŞIMA KATEGORİSİ-{tasima_kategorisi}\nSINIRSIZ'
-    return f'{kapsam}\n-TAŞIMA KATEGORİSİ-{tasima_kategorisi}\nSINIR {int(limit)}'
+def _1136_puan_hesapla(satirlar: list[dict]) -> tuple[float, bool]:
+    """
+    ADR 1.1.3.6 miktar muafiyeti — puan sistemi.
+    Her kalem kendi miktarı ve taşıma kategorisiyle ayrı ayrı değerlendirilir.
+    TC 4 → 0 puan (sınırsız), TC 1/2/3 → miktar × puan çarpanı.
+    Toplam ≤ 1000 → muafiyet EVET, > 1000 → HAYIR.
+    """
+    toplam = 0.0
+    for s in satirlar:
+        tc = s.get('tasima_kategorisi', 3)
+        puan_carpan = TC_PUANLARI.get(tc, 1)
+        toplam += s['miktar'] * puan_carpan
+    return toplam, toplam <= MAX_PUAN
+
+
+def _muafiyet_metni(satirlar: list[dict]) -> str:
+    """Her grup için ADR 1.1.3.6 puan tabanlı muafiyet metni üretir."""
+    toplam_puan, muaf = _1136_puan_hesapla(satirlar)
+    kapsam = 'EVET' if muaf else 'HAYIR'
+    return f"{kapsam}\n-ADR 1.1.3.6\nPUAN: {toplam_puan:.0f}/1000"
 
 
 # ---------------------------------------------------------------------------
@@ -158,9 +173,17 @@ class AtikGonderim:
         unique = list(dict.fromkeys(self.un_nolar))  # sıra koruyarak deduplicate
         return ', '.join(f'UN {u}' for u in unique)
 
+    # Ham satirlar (puan hesabı için saklanır)
+    _satirlar: list = field(default_factory=list)
+
     @property
     def muafiyet(self) -> str:
-        return _muafiyet_metni(self.tasima_kategorisi, self.miktar_kg)
+        if self._satirlar:
+            return _muafiyet_metni(self._satirlar)
+        # Fallback: eski mantık
+        toplam_puan = self.miktar_kg * TC_PUANLARI.get(self.tasima_kategorisi, 1)
+        kapsam = 'EVET' if toplam_puan <= MAX_PUAN else 'HAYIR'
+        return f"{kapsam}\n-ADR 1.1.3.6\nPUAN: {toplam_puan:.0f}/1000"
 
     @property
     def dosya_adi_parcasi(self) -> str:
@@ -307,6 +330,7 @@ def export_oku(dosya_path: str | Path) -> tuple[list[AtikGonderim], list[str]]:
             un_nolar=un_listesi,
             miktar_kg=toplam_miktar,
             tasima_kategorisi=min_kategori,
+            _satirlar=satirlar,
         ))
 
     # Tarihe göre sırala
