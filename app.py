@@ -94,35 +94,11 @@ with st.sidebar:
     gonderici_firma = st.text_input("Firma Unvanı", key="gonderici_firma",
                                      placeholder="Firma adını girin")
 
-    st.divider()
-
-    # 3️⃣ Boşaltma Kontrol Formu
-    st.markdown("**3️⃣ Boşaltma Kontrol Formu**")
-    docx_secili = st.session_state.get("docx_uret_checkbox", False)
-    if docx_secili:
-        with st.container(border=True, key="imza_karti"):
-            st.caption("📋 Boşaltma Kontrol Dökümanı için doldurun:")
-            bosaltan_adi = st.text_input("Boşaltan", key="bosaltan_adi", placeholder="Ad Soyad")
-            sofor_adi = st.text_input("Şoför", key="sofor_adi", placeholder="Ad Soyad")
-    else:
-        bosaltan_adi = sofor_adi = ""
-        st.caption("Ana ekranda 'Boşaltma Kontrol Dökümanı oluştur' kutucuğunu işaretleyin.")
-
-    st.divider()
-
-    # 4️⃣ Gönderim Kontrol Formu
-    st.markdown("**4️⃣ Gönderim Kontrol Formu**")
-    gonderim_docx_secili = st.session_state.get("gonderim_docx_uret", False)
-    if gonderim_docx_secili:
-        with st.container(border=True, key="gonderim_karti"):
-            st.caption("📋 Gönderim Kontrol Dökümanı için doldurun:")
-            gonderici_adi = st.text_input("Gönderen", key="gonderici_adi", placeholder="Ad Soyad")
-            sofor_adi_g = st.text_input("Şoför", key="sofor_adi_g", placeholder="Ad Soyad")
-    else:
-        gonderici_adi = sofor_adi_g = ""
-        st.caption("Ana ekranda 'Gönderim Kontrol Dökümanı oluştur' kutucuğunu işaretleyin.")
-
     mod = st.session_state.get("mod")
+
+    # Değişkenler her zaman tanımlı olsun
+    bosaltan_adi = sofor_adi = ""
+    gonderici_adi = sofor_adi_g = ""
 
 # ---------------------------------------------------------------------------
 # BAŞLIK
@@ -220,6 +196,8 @@ if mod == "bosaltma":
             )
             if docx_uret and _DOCX_DESTEGI:
                 st.success("✅ Aktif — her sefer için Kontrol Dökümanı (PDF) üretilecek.")
+                bosaltan_adi = st.text_input("Boşaltan Adı Soyadı", key="bosaltan_adi", placeholder="Ad Soyad")
+                sofor_adi = st.text_input("Taşıyıcı/Şoför Adı Soyadı", key="sofor_adi", placeholder="Ad Soyad")
             elif not _DOCX_DESTEGI:
                 st.warning("python-docx kurulu değil.")
             else:
@@ -309,8 +287,10 @@ elif mod == "gonderim":
             )
             if gonderim_docx_uret:
                 st.success("✅ Aktif — her Tarih+Plaka+Taşıyıcı grubu için PDF üretilecek.")
+                gonderici_adi = st.text_input("Gönderen Adı Soyadı", key="gonderici_adi", placeholder="Ad Soyad")
+                sofor_adi_g = st.text_input("Taşıyıcı/Şoför Adı Soyadı", key="sofor_adi_g", placeholder="Ad Soyad")
             else:
-                st.caption("İşaretlerseniz, sol sidebar **4️⃣** bölümünden gönderen ve şoför bilgilerini doldurun.")
+                st.caption("İşaretlerseniz gönderen ve şoför bilgilerini girin.")
 
     st.divider()
 
