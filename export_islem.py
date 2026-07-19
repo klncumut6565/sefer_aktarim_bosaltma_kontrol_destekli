@@ -133,9 +133,8 @@ def _1136_puan_hesapla(satirlar: list[dict]) -> tuple[float, bool]:
 
 def _muafiyet_metni(satirlar: list[dict]) -> str:
     """Her grup için ADR 1.1.3.6 puan tabanlı muafiyet metni üretir."""
-    toplam_puan, muaf = _1136_puan_hesapla(satirlar)
-    kapsam = 'EVET' if muaf else 'HAYIR'
-    return f"{kapsam}\n-ADR 1.1.3.6\nPUAN: {toplam_puan:.0f}/1000"
+    _, muaf = _1136_puan_hesapla(satirlar)
+    return 'EVET' if muaf else 'HAYIR'
 
 
 # ---------------------------------------------------------------------------
@@ -182,8 +181,7 @@ class AtikGonderim:
             return _muafiyet_metni(self._satirlar)
         # Fallback: eski mantık
         toplam_puan = self.miktar_kg * TC_PUANLARI.get(self.tasima_kategorisi, 1)
-        kapsam = 'EVET' if toplam_puan <= MAX_PUAN else 'HAYIR'
-        return f"{kapsam}\n-ADR 1.1.3.6\nPUAN: {toplam_puan:.0f}/1000"
+        return 'EVET' if toplam_puan <= MAX_PUAN else 'HAYIR'
 
     @property
     def dosya_adi_parcasi(self) -> str:
