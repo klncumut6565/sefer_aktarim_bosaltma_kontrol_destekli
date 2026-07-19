@@ -36,7 +36,7 @@ st.set_page_config(
 st.markdown("""
 <style>
 div.st-key-docx_karti, div.st-key-imza_karti,
-div.st-key-gonderim_karti {
+div.st-key-gonderim_karti, div.st-key-gonderim_ana_karti {
     background-color: #FCE4EC;
     border: 2px solid #F48FB1 !important;
     border-radius: 10px;
@@ -301,7 +301,7 @@ elif mod == "gonderim":
         st.info("Atık gönderimleri her zaman **ADR-AMBALAJLI** olarak işlenir.")
 
         st.subheader("5️⃣ Gönderim Kontrol Dökümanı")
-        with st.container(border=True, key="gonderim_karti"):
+        with st.container(border=True, key="gonderim_ana_karti"):
             gonderim_docx_uret = st.checkbox(
                 "**📋 Her grup için Gönderim Kontrol Dökümanı oluştur**",
                 value=False,
@@ -310,7 +310,7 @@ elif mod == "gonderim":
             if gonderim_docx_uret:
                 st.success("✅ Aktif — her Tarih+Plaka+Taşıyıcı grubu için PDF üretilecek.")
             else:
-                st.caption("İşaretlerseniz, sol sidebar **5️⃣** bölümünden gönderen ve şoför bilgilerini doldurun.")
+                st.caption("İşaretlerseniz, sol sidebar **4️⃣** bölümünden gönderen ve şoför bilgilerini doldurun.")
 
     st.divider()
 
