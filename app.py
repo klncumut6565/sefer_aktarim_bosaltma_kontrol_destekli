@@ -36,7 +36,7 @@ st.set_page_config(
 st.markdown("""
 <style>
 div.st-key-docx_karti, div.st-key-imza_karti,
-div.st-key-gonderim_karti, div.st-key-gonderici_imza_karti {
+div.st-key-gonderim_karti {
     background-color: #FCE4EC;
     border: 2px solid #F48FB1 !important;
     border-radius: 10px;
@@ -69,53 +69,58 @@ CALISMA_KLASORU = Path(st.session_state.calisma_klasoru)
 with st.sidebar:
     st.header("🏢 Firma Bilgileri")
 
-    logo_dosya = st.file_uploader(
-        "Firma Logosu",
-        type=["png", "jpg", "jpeg"],
-        key="logo_uploader",
-        help="Excel'in ve Kontrol Dökümanının sol üst köşesine eklenir.",
-    )
-    if logo_dosya is not None:
+    # Logo
+    logo_dosya = st.file_uploader("Firma Logosu", type=["png","jpg","jpeg"],
+        key="logo_uploader", label_visibility="collapsed",
+        help="Excel ve Kontrol Dökümanlarına eklenir.")
+    if logo_dosya:
         st.session_state.logo_bytes = logo_dosya.getvalue()
-
     if st.session_state.logo_bytes:
-        st.image(st.session_state.logo_bytes, width=160)
-        if st.button("🗑️ Logoyu Kaldır", use_container_width=True):
-            st.session_state.logo_bytes = None
-            st.rerun()
+        col_l, col_r = st.columns([2,1])
+        with col_l:
+            st.image(st.session_state.logo_bytes, width=120)
+        with col_r:
+            if st.button("🗑️", help="Logoyu kaldır"):
+                st.session_state.logo_bytes = None
+                st.rerun()
     else:
-        st.caption("Logo yüklenmezse çıktılar logosuz oluşturulur.")
+        st.caption("📎 Logo yükleyin (isteğe bağlı)")
 
     st.divider()
     mod = st.session_state.get("mod")
 
-    # İmza bilgileri — her iki modüle göre etiket değişir
+    # --- BOSALTMA MODÜ ---
     if mod == "bosaltma":
-        st.subheader("👤 İmza Bilgileri")
         docx_secili = st.session_state.get("docx_uret_checkbox", False)
         if docx_secili:
+            st.markdown("**4️⃣ Boşaltma Kontrol Formu**")
             with st.container(border=True, key="imza_karti"):
-                st.caption("📋 Boşaltma Kontrol Dökümanı için doldurun:")
-                bosaltan_adi = st.text_input("Boşaltan Adı Soyadı", key="bosaltan_adi")
-                sofor_adi = st.text_input("Taşıyıcı/Şoför Adı Soyadı", key="sofor_adi")
+                bosaltan_adi = st.text_input("Boşaltan", key="bosaltan_adi", placeholder="Ad Soyad")
+                sofor_adi = st.text_input("Şoför", key="sofor_adi", placeholder="Ad Soyad")
         else:
-            bosaltan_adi = ""
-            sofor_adi = ""
-            st.caption("ℹ️ Sağdaki **'Boşaltma Kontrol Dökümanı oluştur'** kutucuğunu işaretlediğinizde bu alanlar aktif olur.")
+            bosaltan_adi = sofor_adi = ""
+            st.caption("ℹ️ 'Boşaltma Kontrol Dökümanı' kutucuğunu işaretleyin → imza alanları aktif olur.")
 
+    # --- GÖNDERİM MODÜ ---
     elif mod == "gonderim":
-        st.subheader("👤 İmza & Firma Bilgileri")
-        gonderici_firma = st.text_input(
-            "Gönderici Firma Unvanı",
-            key="gonderici_firma",
-            help="Tüm gönderim kayıtlarına bu firma adı yazılır.",
-        )
-        with st.container(border=True, key="gonderici_imza_karti"):
-            st.caption("📋 Gönderim Kontrol Dökümanı için doldurun:")
-            gonderici_adi = st.text_input("Gönderen Adı Soyadı", key="gonderici_adi")
-            sofor_adi_g = st.text_input("Taşıyıcı/Şoför Adı Soyadı", key="sofor_adi_g")
+        st.markdown("**3️⃣ Gönderici Firma**")
+        gonderici_firma = st.text_input("Firma Unvanı", key="gonderici_firma",
+                                         placeholder="Firma adını girin")
+
+        st.markdown("**5️⃣ Gönderim Kontrol Formu İmza**")
+        gonderim_docx_secili = st.session_state.get("gonderim_docx_uret", False)
+        if gonderim_docx_secili:
+            with st.container(border=True, key="gonderim_karti"):
+                st.caption("📋 Gönderim Kontrol Dökümanı için doldurun:")
+                gonderici_adi = st.text_input("Gönderen", key="gonderici_adi",
+                                               placeholder="Ad Soyad")
+                sofor_adi_g = st.text_input("Şoför", key="sofor_adi_g",
+                                             placeholder="Ad Soyad")
+        else:
+            gonderici_adi = sofor_adi_g = ""
+            st.caption("ℹ️ **'Gönderim Kontrol Dökümanı oluştur'** kutucuğunu işaretlediğinizde bu alanlar aktif olur.")
     else:
-        st.caption("Dosya yüklediğinizde bu bölüm aktif hale gelecektir.")
+        st.caption("Dosya yüklendiğinde bu bölüm aktif olur.")
         bosaltan_adi = sofor_adi = ""
         gonderici_firma = gonderici_adi = sofor_adi_g = ""
 
@@ -266,7 +271,7 @@ if mod == "bosaltma":
 # GÖNDERIM MODÜLÜ — ayarlar
 # ---------------------------------------------------------------------------
 elif mod == "gonderim":
-    col_g1, col_g2 = st.columns(2)
+    col_g1, col_g2 = st.columns([3, 2])
     with col_g1:
         st.subheader("3️⃣ Export Önizleme")
         if export_dosya:
@@ -279,13 +284,11 @@ elif mod == "gonderim":
                     with st.expander(f"⚠️ {len(uyarilar_on)} uyarı"):
                         for u in uyarilar_on:
                             st.caption(u)
-                # Önizleme tablosu
                 import pandas as pd
                 preview_data = [{
-                    "Tarih": g.tarih_str,
-                    "Plaka": g.plaka,
-                    "Taşıyıcı": g.tasiyici[:30],
-                    "Taşıma No": g.tasima_nolari_str[:30],
+                    "Tarih": g.tarih_str, "Plaka": g.plaka,
+                    "Taşıyıcı": g.tasiyici[:25],
+                    "Taşıma No": g.tasima_nolari_str[:25],
                     "Miktar (kg)": f"{g.miktar_kg:.0f}",
                     "Muafiyet": g.muafiyet.split('\n')[0],
                 } for g in gonderimler_on]
@@ -294,17 +297,20 @@ elif mod == "gonderim":
                 st.error(f"Export okunamadı: {e}")
 
     with col_g2:
-        st.subheader("4️⃣ Gönderim Kontrol Dökümanı")
+        st.subheader("4️⃣ Taşıma Türü")
+        st.info("Atık gönderimleri her zaman **ADR-AMBALAJLI** olarak işlenir.")
+
+        st.subheader("5️⃣ Gönderim Kontrol Dökümanı")
         with st.container(border=True, key="gonderim_karti"):
             gonderim_docx_uret = st.checkbox(
-                "**📋 Her grup için Gönderim Kontrol Dökümanı (PDF) oluştur**",
+                "**📋 Her grup için Gönderim Kontrol Dökümanı oluştur**",
                 value=False,
                 key="gonderim_docx_uret",
             )
             if gonderim_docx_uret:
                 st.success("✅ Aktif — her Tarih+Plaka+Taşıyıcı grubu için PDF üretilecek.")
             else:
-                st.caption("İşaretlerseniz sol sidebar'dan Gönderen bilgilerini doldurun.")
+                st.caption("İşaretlerseniz, sol sidebar **5️⃣** bölümünden gönderen ve şoför bilgilerini doldurun.")
 
     st.divider()
 

@@ -59,7 +59,7 @@ COL = {
     'dolduran': 18,
 }
 
-DATA_START_ROW = 7
+DATA_START_ROW = 6
 ZEBRA_RENKLER = ['D9E1F2', 'FFFFFF']  # Mavi/Beyaz zebra
 
 

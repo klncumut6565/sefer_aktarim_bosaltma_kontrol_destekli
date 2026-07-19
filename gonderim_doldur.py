@@ -67,12 +67,33 @@ def _fill_checkbox(cell, secim: str) -> None:
 
 
 def _logo_degistir(d: docx.Document, logo_bytes: bytes) -> None:
-    """Header'daki logo resmini kullanıcının logosuyla değiştirir."""
+    """Belgedeki ilk logo resmini (rId7/image1.png — sol üst köşe) kullanıcı logosuyla değiştirir.
+    Gönderim şablonunda logo body'deki ilk tablonun hücresinde, header'da değil."""
+    IMAGE_REL_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image'
+
+    # Önce document part rels içinde dene (body'deki resimler buradan)
+    for rel in d.part.rels.values():
+        if rel.reltype == IMAGE_REL_TYPE:
+            # En büyük resmi logo kabul et (ikonlar küçük, logo büyük)
+            try:
+                mevcut = rel.target_part._blob
+                from PIL import Image
+                import io as _io
+                im = Image.open(_io.BytesIO(mevcut))
+                if im.size[0] > 200:  # 200px'den geniş → logo
+                    rel.target_part._blob = logo_bytes
+                    return
+            except Exception:
+                rel.target_part._blob = logo_bytes
+                return
+
+    # Fallback: header rels
     for section in d.sections:
         try:
             for rel in section.header.part.rels.values():
-                if rel.reltype == 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image':
+                if rel.reltype == IMAGE_REL_TYPE:
                     rel.target_part._blob = logo_bytes
+                    return
         except AttributeError:
             pass
 
