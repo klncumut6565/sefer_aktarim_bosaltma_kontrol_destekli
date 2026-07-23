@@ -410,6 +410,7 @@ if calistir:
                                     gonderici_adi=gonderici_adi_val,
                                     sofor_adi=sofor_adi_g_val,
                                     logo_bytes=st.session_state.logo_bytes,
+                                    un_miktar_str=g.un_miktar_str,
                                 )
                                 pdf_yolu = docx_to_pdf(docx_yolu, pdf_klasor)
                                 uretilen_pdf.append({

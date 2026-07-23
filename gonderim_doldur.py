@@ -24,10 +24,15 @@ TIK = '✓'
 # Soru 3 (Konteynır): İlgili Değil
 UST_SECIMLER = {0: 'Evet', 1: 'İlgili Değil', 2: 'İlgili Değil'}
 
-# Gönderen-Paketleyen kontrolleri: tüm satırlar ✓
-GONDEREN_TIK_SATIRLAR = {2, 3, 4, 5, 6, 7, 8, 9, 10}   # Table 2, sol taraf (satır indeksi)
+ID = 'İ.D.'
+
+# Gönderen-Paketleyen: 5,8,9. maddeler (satır indeksleri 6,9,10) → İ.D.
+GONDEREN_ID_SATIRLAR = {6, 9, 10}
+# Geri kalanlar ✓
+GONDEREN_TIK_SATIRLAR = {2, 3, 4, 5, 7, 8}
+
 # Yükleyen kontrolleri: tüm satırlar ✓
-YUKLEYEN_TIK_SATIRLAR = {2, 3, 4, 5, 6, 7, 8, 9, 10}   # Table 2, sağ taraf
+YUKLEYEN_TIK_SATIRLAR = {2, 3, 4, 5, 6, 7, 8, 9, 10}
 
 # Araç Türü Kamyon checkbox metni (şablondaki tam text'e göre)
 ARAC_TURU_KAMYON = '[ ] Kamyon'
@@ -109,6 +114,7 @@ def gonderim_dokumani_olustur(
     gonderici_adi: str = '',
     sofor_adi: str = '',
     logo_bytes: Optional[bytes] = None,
+    un_miktar_str: str = '',   # ör. "UN 3509 • 2300 kg, UN 3077 • 780 kg"
 ) -> Path:
     """
     Gönderim Kontrol Dökümanı şablonunu doldurup .docx olarak kaydeder.
@@ -146,11 +152,18 @@ def gonderim_dokumani_olustur(
         0: tarih,           # Tarih
         1: gonderici_firma, # Gönderici Firma Unvanı
         2: tasiyici_firma,  # Taşıyıcı Firma Unvanı
-        3: plaka,           # Araç Plaka No
     }
     for row_idx, deger in bilgi_map.items():
         if deger and row_idx < len(t1.rows):
             _write_cell(t1.rows[row_idx].cells[1], deger)
+
+    # Satır 3: Araç Plaka No — yanına UN No + Miktar ekle
+    if len(t1.rows) > 3:
+        plaka_deger = plaka
+        if un_miktar_str:
+            plaka_deger = f"{plaka}   |   {un_miktar_str}"
+        if plaka_deger:
+            _write_cell(t1.rows[3].cells[1], plaka_deger)
 
     # Satır 4: Araç Türü — Kamyon seçili
     if len(t1.rows) > 4:
@@ -168,6 +181,9 @@ def gonderim_dokumani_olustur(
     for row_idx in GONDEREN_TIK_SATIRLAR:
         if row_idx < len(t2.rows):
             _write_cell(t2.rows[row_idx].cells[2], TIK)
+    for row_idx in GONDEREN_ID_SATIRLAR:
+        if row_idx < len(t2.rows):
+            _write_cell(t2.rows[row_idx].cells[2], ID)
     for row_idx in YUKLEYEN_TIK_SATIRLAR:
         if row_idx < len(t2.rows):
             _write_cell(t2.rows[row_idx].cells[5], TIK)

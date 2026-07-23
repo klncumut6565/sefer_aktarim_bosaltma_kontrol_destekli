@@ -184,7 +184,17 @@ class AtikGonderim:
         return 'EVET' if toplam_puan <= MAX_PUAN else 'HAYIR'
 
     @property
-    def dosya_adi_parcasi(self) -> str:
+    def un_miktar_str(self) -> str:
+        """Kontrol formunun Plaka satırına yazılacak 'UN 3509 • 2300 kg' formatı."""
+        if not self._satirlar:
+            return f"UN {', '.join(self.un_nolar)} • {self.miktar_kg:.0f} kg" if self.un_nolar else ''
+        parcalar = []
+        for s in self._satirlar:
+            un = s.get('un_no', '')
+            mik = s.get('miktar', 0)
+            if un:
+                parcalar.append(f"UN {un} • {mik:.0f} kg")
+        return ', '.join(parcalar)
         """Gönderim Kontrol Formu dosya adı için güvenli parça."""
         tarih = self.tarih.strftime('%Y%m%d') if self.tarih else 'bilinmeyen'
         plaka = re.sub(r'[^\w]', '', self.plaka)
@@ -207,7 +217,7 @@ def export_oku(dosya_path: str | Path) -> tuple[list[AtikGonderim], list[str]]:
     engine = 'xlrd' if dosya_path.suffix.lower() == '.xls' else 'openpyxl'
 
     try:
-        df = pd.read_excel(dosya_path, engine=engine, header=None)
+        df = pd.read_excel(dosya_path, engine=engine, header=None, dtype=str)
     except Exception as e:
         raise ValueError(f"Dosya okunamadı: {e}")
 
