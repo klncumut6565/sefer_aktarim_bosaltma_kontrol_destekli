@@ -147,7 +147,6 @@ with col_kaynak:
     )
     export_dosya = st.file_uploader(
         "Atık Gönderim — Export XLS/XLSX dosyası (gönderim için)",
-        type=["xls", "xlsx"],
         key="export_uploader",
     )
 
