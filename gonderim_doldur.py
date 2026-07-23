@@ -72,35 +72,49 @@ def _fill_checkbox(cell, secim: str) -> None:
 
 
 def _logo_degistir(d: docx.Document, logo_bytes: bytes) -> None:
-    """Belgedeki ilk logo resmini (rId7/image1.png — sol üst köşe) kullanıcı logosuyla değiştirir.
-    Gönderim şablonunda logo body'deki ilk tablonun hücresinde, header'da değil."""
-    IMAGE_REL_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image'
+    """Firma logosunu SOL ÜST BAŞLIK alanına (header tablosunun ilk hücresi)
+    yerleştirir.
 
-    # Önce document part rels içinde dene (body'deki resimler buradan)
-    for rel in d.part.rels.values():
-        if rel.reltype == IMAGE_REL_TYPE:
-            # En büyük resmi logo kabul et (ikonlar küçük, logo büyük)
-            try:
-                mevcut = rel.target_part._blob
-                from PIL import Image
-                import io as _io
-                im = Image.open(_io.BytesIO(mevcut))
-                if im.size[0] > 200:  # 200px'den geniş → logo
-                    rel.target_part._blob = logo_bytes
-                    return
-            except Exception:
-                rel.target_part._blob = logo_bytes
-                return
+    ÖNEMLİ: Body'deki kamyon / tanker / konteyner çizimlerine ASLA dokunulmaz.
+    Sadece header hedeflenir:
+      1) Header'da zaten logo resmi varsa  -> içeriği değiştirilir.
+      2) Header'da resim yoksa (bu şablonda durum bu) -> header tablosunun
+         sol üst hücresine yeni resim olarak eklenir.
+    """
+    import io as _io
+    from docx.shared import Cm
 
-    # Fallback: header rels
+    IMAGE_REL_TYPE = ('http://schemas.openxmlformats.org/officeDocument/'
+                      '2006/relationships/image')
+
     for section in d.sections:
+        header = section.header
+
+        # 1) Header'da mevcut logo resmi varsa sadece onu güncelle
         try:
-            for rel in section.header.part.rels.values():
-                if rel.reltype == IMAGE_REL_TYPE:
-                    rel.target_part._blob = logo_bytes
-                    return
+            mevcut = [r for r in header.part.rels.values()
+                      if r.reltype == IMAGE_REL_TYPE]
         except AttributeError:
-            pass
+            mevcut = []
+        if mevcut:
+            for rel in mevcut:
+                rel.target_part._blob = logo_bytes
+            return
+
+        # 2) Header tablosunun sol üst hücresine logoyu ekle
+        if header.tables:
+            hedef = header.tables[0].rows[0].cells[0]
+            for p in hedef.paragraphs:
+                for r in p.runs:
+                    r.text = ''
+            hedef.paragraphs[0].add_run().add_picture(
+                _io.BytesIO(logo_bytes), width=Cm(3.2))
+            return
+
+        # 3) Tablo yoksa header paragrafına ekle
+        p = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+        p.add_run().add_picture(_io.BytesIO(logo_bytes), width=Cm(3.2))
+        return
 
 
 def gonderim_dokumani_olustur(
