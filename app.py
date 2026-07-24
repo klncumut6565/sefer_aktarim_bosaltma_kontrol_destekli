@@ -55,6 +55,8 @@ for key, default in [
     ("log_mesajlari", []),
     ("logo_bytes", None),
     ("mod", None),      # "bosaltma" | "gonderim" | None
+    ("docx_uret_checkbox", False),
+    ("gonderim_docx_uret", False),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -190,7 +192,6 @@ if mod == "bosaltma":
         with st.container(border=True, key="docx_karti"):
             docx_uret = st.checkbox(
                 "**📋 Her sefer için Boşaltma Kontrol Dökümanı oluştur**",
-                value=False,
                 disabled=not _DOCX_DESTEGI,
                 key="docx_uret_checkbox",
             )
@@ -282,7 +283,6 @@ elif mod == "gonderim":
         with st.container(border=True, key="gonderim_ana_karti"):
             gonderim_docx_uret = st.checkbox(
                 "**📋 Her grup için Gönderim Kontrol Dökümanı oluştur**",
-                value=False,
                 key="gonderim_docx_uret",
             )
             if gonderim_docx_uret:
