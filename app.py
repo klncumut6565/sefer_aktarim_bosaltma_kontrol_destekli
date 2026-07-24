@@ -14,6 +14,7 @@ Yüklenen dosya tipine göre mod otomatik belirlenir:
 from __future__ import annotations
 
 import re
+import sys
 import tempfile
 from pathlib import Path
 
@@ -388,6 +389,7 @@ if calistir:
 
                 # Kontrol dökümanları
                 uretilen_pdf = []
+                hatalar = []
                 if st.session_state.get("gonderim_docx_uret") and _DOCX_DESTEGI:
                     sablon_docx = Path(__file__).parent / "Gonderim_Kontrol_Sablonu.docx"
                     pdf_klasor = CALISMA_KLASORU / "gonderim_kontrol"
@@ -422,11 +424,21 @@ if calistir:
                                 })
                                 log.append(f"  📋 {dosya_adi} oluşturuldu")
                             except Exception as exc:
-                                log.append(f"  ⚠ Kontrol dökümanı hatası ({g.plaka}): {exc}")
+                                import traceback
+                                iz = traceback.format_exc()
+                                hata_kaydi = {
+                                    "baslik": f"{g.tarih_str} / {g.plaka}",
+                                    "mesaj": f"{type(exc).__name__}: {exc}",
+                                    "iz": iz,
+                                }
+                                hatalar.append(hata_kaydi)
+                                log.append(f"  ❌ HATA ({g.plaka}): {type(exc).__name__}: {exc}")
+                                print(iz, file=sys.stderr)   # Streamlit Cloud loglarına düşsün
 
                 excel_sonuc["_excel_yolu"] = cikti_excel
                 excel_sonuc["_log"] = log
                 excel_sonuc["_uretilen_pdf"] = uretilen_pdf
+                excel_sonuc["_hatalar"] = hatalar
                 excel_sonuc["_uyarilar"] = uyarilar
                 st.session_state.sonuc = {"tip": "gonderim", "veri": excel_sonuc}
 
@@ -444,12 +456,34 @@ if st.session_state.sonuc:
     st.divider()
     st.subheader("✅ Sonuç")
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("Yeni Eklenen", r["eklenen"])
     c2.metric("Atlanan", r["atlanan"])
     c3.metric("Toplam", r["toplam"])
+    if tip == "gonderim":
+        c4.metric("Kontrol Formu", len(r.get("_uretilen_pdf") or []))
+    else:
+        c4.metric("Kontrol Formu", r.get("docx_uretilen", 0))
 
-    with st.expander("İşlem Günlüğü", expanded=False):
+    hatalar = r.get("_hatalar") or []
+    beklenen_form = 0
+    if tip == "gonderim" and st.session_state.get("gonderim_docx_uret"):
+        beklenen_form = r["eklenen"] + r["atlanan"]
+    uretilen_form = len(r.get("_uretilen_pdf") or [])
+
+    # Hata varsa en üstte, kırmızı ve açık şekilde göster
+    if hatalar:
+        st.error(f"❌ {len(hatalar)} kontrol dökümanı oluşturulamadı. Ayrıntılar aşağıda.")
+        for h in hatalar:
+            with st.expander(f"❌ {h['baslik']} — {h['mesaj']}", expanded=True):
+                st.code(h["iz"], language=None)
+    elif beklenen_form and uretilen_form == 0:
+        st.error(
+            "❌ Kontrol dökümanı üretilmedi. 'Gönderim Kontrol Dökümanı oluştur' "
+            "seçili ama hiç dosya oluşmadı — işlem günlüğünü inceleyin."
+        )
+
+    with st.expander("İşlem Günlüğü", expanded=bool(hatalar)):
         st.code("\n".join(r.get("_log", [])), language=None)
 
     # Uyarılar (gönderim modülü)
