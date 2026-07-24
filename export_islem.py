@@ -195,6 +195,9 @@ class AtikGonderim:
             if un:
                 parcalar.append(f"UN {un} • {mik:.0f} kg")
         return ', '.join(parcalar)
+
+    @property
+    def dosya_adi_parcasi(self) -> str:
         """Gönderim Kontrol Formu dosya adı için güvenli parça."""
         tarih = self.tarih.strftime('%Y%m%d') if self.tarih else 'bilinmeyen'
         plaka = re.sub(r'[^\w]', '', self.plaka)
