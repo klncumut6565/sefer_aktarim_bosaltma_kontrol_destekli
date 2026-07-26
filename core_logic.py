@@ -68,7 +68,7 @@ COL = {
     "gonderen": 4, "alici": 5, "vergi_no": 6, "plaka": 7,
     "tasima_turu": 8, "sefer_no": 9, "un_no": 10, "urun_adi": 11,
     "miktar": 12, "birim": 13, "src_sofor": 20, "muayene_tarihi": 16,
-    "muafiyet": 19,
+    "muafiyet": 19, "bildirim_denetim": 21,
 }
 
 
@@ -84,7 +84,27 @@ class Yuk:
     plaka_sabit: str = ""           # PDF'den okunan orijinal plaka
     muayene_tarihi: Optional[datetime] = None
     muafiyet: str = ""
+    bildirim: Optional[datetime] = None   # Sefer bildirim tarih/saati
     kontrol_dokumani_yolu: str = ""   # Sefer No hücresine eklenecek köprünün hedef yolu (göreceli)
+
+    @property
+    def bildirim_hatali(self) -> bool:
+        """Bildirim, başlangıç (tarih) tarih-saatinden SONRA yapılmışsa hatalı."""
+        if self.tarih is None or self.bildirim is None:
+            return False
+        return self.bildirim > self.tarih
+
+    @property
+    def bildirim_denetim_metni(self) -> str:
+        """Excel'in denetim sütununa yazılacak Türkçe açıklama."""
+        if self.tarih is None or self.bildirim is None:
+            return ""
+        if self.bildirim > self.tarih:
+            b_str = self.bildirim.strftime("%d.%m.%Y %H:%M")
+            t_str = self.tarih.strftime("%d.%m.%Y %H:%M")
+            return (f"HATALI: Bildirim ({b_str}), başlangıçtan ({t_str}) sonra yapılmış. "
+                    f"Sefer bildirimi başlamadan önce yapılmalıdır.")
+        return "Uygun"
 
     @property
     def sefer_no_int(self):
@@ -113,6 +133,7 @@ class Yuk:
             COL["birim"]: self.birim, COL["src_sofor"]: self.src_sofor,
             COL["muayene_tarihi"]: self.muayene_tarihi.date() if self.muayene_tarihi else None,
             COL["muafiyet"]: muafiyet_text,
+            COL["bildirim_denetim"]: self.bildirim_denetim_metni,
         }
 
     def _default_muafiyet(self) -> str:
@@ -173,6 +194,17 @@ def extract_pdf_data(pdf_path: Path, tasima_turu_secimi: str = "ADR-AMBALAJLI") 
     unvan    = f"{f1} {f2}".strip()
     m_t = re.search(r"BAŞLANGIÇ\s+(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2})", text)
     tarih = datetime.strptime(m_t.group(1), "%d/%m/%Y %H:%M") if m_t else None
+    # BİLDİRİM tarih/saati — "SON YÜK BİLDİRİM" değil, ilk (normal) BİLDİRİM alınır.
+    # Metinde "SON YÜK BİLDİRİM" da geçtiği için onu hariç tutuyoruz.
+    bildirim = None
+    for bm in re.finditer(r"(SON YÜK\s+)?B[İI]LD[İI]R[İI]M\s+(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2})", text):
+        if bm.group(1):          # "SON YÜK BİLDİRİM" → atla
+            continue
+        try:
+            bildirim = datetime.strptime(bm.group(2), "%d/%m/%Y %H:%M")
+        except ValueError:
+            bildirim = None
+        break
     m_g = re.search(r"Gönderen\s+\((\d+)\)\s+(.+)", text)
     gvn, g = (m_g.group(1), m_g.group(2).strip()) if m_g else ("", "")
     m_a = re.search(r"Alıcı\s+\((\d+)\)\s+(.+)", text)
@@ -219,7 +251,7 @@ def extract_pdf_data(pdf_path: Path, tasima_turu_secimi: str = "ADR-AMBALAJLI") 
                           tasiyici_unvan=unvan, gonderen_vn=gvn, gonderen=g,
                           alici_vn=avn, alici=a, un_no=un_no, urun_adi=urun, miktar=mik,
                           birim=birim, plaka_sabit=plaka_sabit, muafiyet=muafiyet,
-                          tasima_turu=tasima_turu))
+                          tasima_turu=tasima_turu, bildirim=bildirim))
     return yukler, plaka_sabit
 
 
@@ -329,8 +361,14 @@ def _rewrite(ws, yukler, style):
                 bold=sefer_no_cell.font.bold, italic=sefer_no_cell.font.italic,
                 color="0563C1", underline="single",
             )
-        fill = cm[y.sefer_no]
-        for c in range(1, MAX_COL - 1):  # U ve V sütunları (21-22) renksiz bırakılır
+        # Bildirim hatalıysa tüm satır sarı; değilse normal zebra rengi
+        if y.bildirim_hatali:
+            fill = PatternFill(start_color="FFF200", end_color="FFF200", fill_type="solid")
+            son_sutun = COL["bildirim_denetim"]   # denetim sütunu da (21) sarıya boyansın
+        else:
+            fill = cm[y.sefer_no]
+            son_sutun = MAX_COL - 2               # 1-20 arası (denetim sütunu boş kalır)
+        for c in range(1, son_sutun + 1):
             ws.cell(row=row, column=c).fill = fill
         ws.row_dimensions[row].height = 54.75
 
