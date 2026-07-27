@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Optional
 
 import docx
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
 
 TIK = '✓'
 
@@ -36,6 +38,12 @@ YUKLEYEN_TIK_SATIRLAR = {2, 3, 4, 5, 6, 7, 8, 9, 10}
 
 # Araç Türü Kamyon checkbox metni (şablondaki tam text'e göre)
 ARAC_TURU_KAMYON = '[ ] Kamyon'
+
+
+def _dup_element(el):
+    """Bir OXML elementinin (ör. rPr alt elemanı) derin kopyasını döner."""
+    import copy
+    return copy.deepcopy(el)
 
 
 def _write_cell(cell, text: str) -> None:
@@ -150,6 +158,29 @@ def gonderim_dokumani_olustur(
     if len(d.tables) < 3:
         raise ValueError(f'Beklenmeyen şablon yapısı: {len(d.tables)} tablo var')
 
+    # ---- Paragraf boşluklarını sıfırla (asıl taşma nedeni buydu) ----
+    # Şablonun docDefaults'unda her paragraftan sonra 8pt (160 twips) otomatik
+    # boşluk tanımlı (Word'ün standart varsayılanı). Belgede ~100 paragraf
+    # olduğu için (özellikle 11 satırlı büyük onay tablosunda) bu boşluk
+    # birikerek ciddi yer kaplıyor ve şablon zaten tam 1 sayfaya sığacak
+    # şekilde tasarlandığından, aşağıda eklenen "Taşıma Evrağı No" satırı gibi
+    # en ufak bir ekleme belgeyi 2. sayfaya taşırıyordu (üst/alt marjı
+    # daraltmak işe yaramıyor çünkü sayfa başındaki başlık header'da yer
+    # alıyor ve header kendi yüksekliğini zaten dayatıyor). Her paragrafın
+    # before/after boşluğunu 0'a çekmek gerçek çözüm: belge her koşulda tek
+    # sayfada kalır, görsel olarak fark edilmez.
+    for p_el in d.element.body.iter(qn('w:p')):
+        pPr = p_el.find(qn('w:pPr'))
+        if pPr is None:
+            pPr = OxmlElement('w:pPr')
+            p_el.insert(0, pPr)
+        spacing = pPr.find(qn('w:spacing'))
+        if spacing is None:
+            spacing = OxmlElement('w:spacing')
+            pPr.append(spacing)
+        spacing.set(qn('w:after'), '0')
+        spacing.set(qn('w:before'), '0')
+
     # ---- Logo ----
     if logo_bytes:
         _logo_degistir(d, logo_bytes)
@@ -239,21 +270,39 @@ def gonderim_dokumani_olustur(
     # zaten var olan Table 1 Satır 4'e (değer hücresine) yazıyoruz
     # Ama Araç Türü checkbox'larını bozmamak için ayrı paragraf ekle
     if tasima_evragi_no and len(t1.rows) > 4:
-        # Taşıma Evrağı No'yu talimat tabloya ilk paragraf olarak ekle
+        # Taşıma Evrağı No'yu talimat tabloya ekle.
+        # ÖNEMLİ: Ayrı bir <w:p> (yeni paragraf) EKLEMİYORUZ; çünkü şablon
+        # zaten tam 1 sayfaya sığacak şekilde tasarlanmış ve yeni bir paragraf
+        # kendi varsayılan paragraf boşluğuyla (space before/after) belgeyi
+        # 2. sayfaya taşırıyordu. Bunun yerine mevcut ilk paragrafın başına,
+        # aynı paragraf içinde, mevcut metinle aynı font/boyutta bir satır
+        # olarak (w:br ile) ekliyoruz — tek satırlık yükseklik dışında ekstra
+        # boşluk oluşturmaz.
         if len(d.tables) >= 4:
             t3 = d.tables[3]
             if t3.rows:
                 ilk_cell = t3.rows[0].cells[0]
-                # Mevcut içeriğin önüne ekle
-                p_yeni = ilk_cell.paragraphs[0]._element
-                from docx.oxml import OxmlElement
-                p_no = OxmlElement('w:p')
+                ilk_p = ilk_cell.paragraphs[0]
+                # Mevcut ilk run'ın font özelliklerini (varsa) referans al
+                ornek_run = ilk_p.runs[0] if ilk_p.runs else None
+
                 r_no = OxmlElement('w:r')
+                if ornek_run is not None and ornek_run._element.find(qn('w:rPr')) is not None:
+                    rPr = OxmlElement('w:rPr')
+                    for child in ornek_run._element.find(qn('w:rPr')):
+                        rPr.append(_dup_element(child))
+                    r_no.append(rPr)
                 t_no = OxmlElement('w:t')
+                t_no.set(qn('xml:space'), 'preserve')
                 t_no.text = f'Taşıma Evrağı No: {tasima_evragi_no}'
                 r_no.append(t_no)
-                p_no.append(r_no)
-                ilk_cell._element.insert(0, p_no)
+                r_no.append(OxmlElement('w:br'))
+                # w:pPr her zaman paragrafın ilk çocuğu olmalı (OOXML şeması);
+                # bu yüzden index 0'a değil, mevcut ilk run'ın hemen önüne ekliyoruz.
+                if ilk_p.runs:
+                    ilk_p.runs[0]._element.addprevious(r_no)
+                else:
+                    ilk_p._p.append(r_no)
 
     cikti_path = Path(cikti_path)
     cikti_path.parent.mkdir(parents=True, exist_ok=True)
