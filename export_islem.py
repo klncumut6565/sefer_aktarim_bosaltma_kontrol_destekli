@@ -55,6 +55,11 @@ ATIK_ADR: dict[str, dict] = {
     "20 01 26*": {"un_no": "3082", "sinif": "9", "pg": "III", "tasimaKategorisi": 3, "sevkiyat_adi": "ÇEVRE İÇİN TEHLİKELİ MADDE, SIVI, B.B.B."},
     "20 01 27*": {"un_no": "3082", "sinif": "9", "pg": "III", "tasimaKategorisi": 3, "sevkiyat_adi": "ÇEVRE İÇİN TEHLİKELİ MADDE, SIVI, B.B.B."},
     "20 01 33*": {"un_no": "3480", "sinif": "9", "pg": "-", "tasimaKategorisi": 2, "sevkiyat_adi": "LİTYUM PİLLER"},
+    "04 02 16*": {"un_no": "3082", "sinif": "9", "pg": "III", "tasimaKategorisi": 3, "sevkiyat_adi": "ÇEVRE İÇİN TEHLİKELİ MADDE, SIVI, B.B.B."},
+    "07 01 04*": {"un_no": "3082", "sinif": "9", "pg": "III", "tasimaKategorisi": 3, "sevkiyat_adi": "ÇEVRE İÇİN TEHLİKELİ MADDE, SIVI, B.B.B."},
+    "07 01 08*": {"un_no": "3077", "sinif": "9", "pg": "III", "tasimaKategorisi": 3, "sevkiyat_adi": "ÇEVRE İÇİN TEHLİKELİ MADDE, KATI, B.B.B."},
+    "07 01 11*": {"un_no": "3077", "sinif": "9", "pg": "III", "tasimaKategorisi": 3, "sevkiyat_adi": "ÇEVRE İÇİN TEHLİKELİ MADDE, KATI"},
+    "16 01 14*": {"un_no": "3082", "sinif": "9", "pg": "III", "tasimaKategorisi": 3, "sevkiyat_adi": "ÇEVRE İÇİN TEHLİKELİ MADDE, SIVI, B.B.B."},
 }
 
 # Noktalı gösterim olmadan da eşleştirme yap (ör. "080111" → "08 01 11*")

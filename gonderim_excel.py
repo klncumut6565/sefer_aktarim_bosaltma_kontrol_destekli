@@ -173,9 +173,15 @@ def process_export(
     gonderici_adi: str = '',
     logo_bytes: Optional[bytes] = None,
     log_cb=None,
+    yeni_liste: bool = False,
 ) -> dict:
     """
     Gönderim verilerini Excel şablonuna yazar.
+
+    yeni_liste: True ise (kullanıcı "Yeni Liste Oluştur" modunu seçtiyse) şablonda
+    zaten var olabilecek satırlar (ör. boş şablona yanlışlıkla kalmış örnek/eski
+    veri) hiç okunmaz — çıktı SADECE bu çağrıda verilen `gonderimler` verisini içerir.
+    False ise (mevcut listeyi güncelleme) şablondaki satırlar okunup korunur.
 
     Returns:
         {'eklenen': int, 'atlanan': int, 'toplam': int}
@@ -187,7 +193,10 @@ def process_export(
     wb = openpyxl.load_workbook(str(sablon_excel_path))
     ws = wb.active
     stil = _template_style(ws)
-    mevcut_satirlar, mevcut_tasima_nolar = _read_existing(ws)
+    if yeni_liste:
+        mevcut_satirlar, mevcut_tasima_nolar = [], set()
+    else:
+        mevcut_satirlar, mevcut_tasima_nolar = _read_existing(ws)
 
     yeni = []
     atlanan = 0
@@ -201,29 +210,30 @@ def process_export(
             yeni.append(g)
             emit(f'  ✓ {g.tasima_nolari_str} — {g.tarih_str} / {g.plaka} ({g.miktar_kg:.0f} kg)')
 
-    # Mevcut satırları da oku (yeniden sıralama için)
+    # Mevcut satırları da oku (yeniden sıralama için) — sadece güncelleme modunda
     mevcut_gonderimler = []
-    for row in range(DATA_START_ROW, ws.max_row + 1):
-        if not ws.cell(row=row, column=COL['evraki']).value:
-            break
-        tarih_val = ws.cell(row=row, column=COL['tarih']).value
-        tasiyici_val = ws.cell(row=row, column=COL['tasiyici']).value or ''
-        plaka_val = ws.cell(row=row, column=COL['plaka']).value or ''
-        evraki_val = str(ws.cell(row=row, column=COL['evraki']).value or '')
-        miktar_val = ws.cell(row=row, column=COL['miktar']).value or 0
-        muafiyet_val = ws.cell(row=row, column=COL['muafiyet']).value or ''
+    if not yeni_liste:
+        for row in range(DATA_START_ROW, ws.max_row + 1):
+            if not ws.cell(row=row, column=COL['evraki']).value:
+                break
+            tarih_val = ws.cell(row=row, column=COL['tarih']).value
+            tasiyici_val = ws.cell(row=row, column=COL['tasiyici']).value or ''
+            plaka_val = ws.cell(row=row, column=COL['plaka']).value or ''
+            evraki_val = str(ws.cell(row=row, column=COL['evraki']).value or '')
+            miktar_val = ws.cell(row=row, column=COL['miktar']).value or 0
+            muafiyet_val = ws.cell(row=row, column=COL['muafiyet']).value or ''
 
-        g_mevcut = AtikGonderim(
-            tarih=tarih_val if isinstance(tarih_val, datetime) else None,
-            tasiyici=str(tasiyici_val),
-            plaka=str(plaka_val),
-            alici='',
-            atik_kodlari=[str(ws.cell(row=row, column=COL['sertifika_no']).value or '')],
-            tasima_nolari=evraki_val.split(', '),
-            un_nolar=[],
-            miktar_kg=float(miktar_val),
-        )
-        mevcut_gonderimler.append(g_mevcut)
+            g_mevcut = AtikGonderim(
+                tarih=tarih_val if isinstance(tarih_val, datetime) else None,
+                tasiyici=str(tasiyici_val),
+                plaka=str(plaka_val),
+                alici='',
+                atik_kodlari=[str(ws.cell(row=row, column=COL['sertifika_no']).value or '')],
+                tasima_nolari=evraki_val.split(', '),
+                un_nolar=[],
+                miktar_kg=float(miktar_val),
+            )
+            mevcut_gonderimler.append(g_mevcut)
 
     tum = sorted(mevcut_gonderimler + yeni, key=lambda g: g.tarih or datetime.min)
     _rewrite(ws, tum, stil, gonderici_adi=gonderici_adi, logo_bytes=logo_bytes)

@@ -385,6 +385,7 @@ if calistir:
                     gonderici_adi=gonderici_adi_val,
                     logo_bytes=st.session_state.logo_bytes,
                     log_cb=log.append,
+                    yeni_liste=(excel_modu_val == "yeni"),
                 )
 
                 # Kontrol dökümanları
