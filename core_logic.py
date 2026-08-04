@@ -212,7 +212,7 @@ def extract_pdf_data(pdf_path: Path, tasima_turu_secimi: str = "ADR-AMBALAJLI") 
     # FIX: KG / LT / Litre / TON + UN No boşluklu/boşluksuz + ondalıklı sayı desteği
     matches = re.findall(
         r"Yük Detayı\s+(.+?)(?:\(UN No:\s*(\d+)\))?\s*-\s*([\d.,]+)\s*"
-        r"(KG|Kg|kg|LT|Lt|lt|L\b|Litre|LİTRE|litre|TON|Ton|ton)",
+        r"(KG|Kg|kg|LT|Lt|lt|L\b|Litre|LİTRE|litre|TON|Ton|ton|Adet|adet|ADET|Parça|parça|PARÇA|Set|set|SET)",
         text, re.DOTALL
     )
     if not matches:
@@ -227,6 +227,8 @@ def extract_pdf_data(pdf_path: Path, tasima_turu_secimi: str = "ADR-AMBALAJLI") 
             birim = "Lt"
         elif birim_upper == "TON":
             birim = "Ton"
+        elif birim_upper in ("ADET", "PARÇA", "SET"):
+            birim = "Adet"
         else:
             birim = "KG"
         # Miktarı normalize et: "1.400" → 1400, "1400,5" → 1400
