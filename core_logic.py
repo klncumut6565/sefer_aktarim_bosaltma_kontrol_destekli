@@ -115,8 +115,9 @@ class Yuk:
         return (self.tarih or datetime.min, self.sefer_no_int, self.urun_adi)
 
     def to_excel_map(self, sira_no: int) -> dict:
-        sefer_val = int(self.sefer_no) if self.sefer_no.isdigit() else self.sefer_no
-        un_val    = int(self.un_no)    if self.un_no.isdigit()    else self.un_no
+        # Sefer No ve UN No: Excel'de scientific notation'a dönüşmemesi için STRING tutulmalı
+        sefer_val = self.sefer_no
+        un_val    = self.un_no
         # UN No 1203 ise ürün adı BENZIN olarak sabitlenir
         urun = "BENZIN" if self.un_no == "1203" else self.urun_adi
         # Plaka: sabit plaka varsa onu kullan (artırılmamış orijinal)
@@ -345,6 +346,9 @@ def _rewrite(ws, yukler, style):
         for c, v in y.to_excel_map(i).items():
             cell = ws.cell(row=row, column=c)
             cell.value = v
+            # Sefer No ve UN No: Text format (scientific notation'a dönüşmesin)
+            if c in (COL["sefer_no"], COL["un_no"]):
+                cell.number_format = "@"
             # Muayene tarihi: tarih değeri olarak sakla, GG.AA.YYYY göster
             if c == COL["muayene_tarihi"] and v is not None:
                 cell.number_format = "DD.MM.YYYY"

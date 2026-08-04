@@ -161,6 +161,9 @@ def _rewrite(ws, gonderimler: list[AtikGonderim], stil: dict,
                     cell.alignment = copy(s['alignment'])
                 if s['number_format']:
                     cell.number_format = s['number_format']
+            # Taşıma No: Text format (scientific notation'a dönüşmesin)
+            if col == COL['evraki']:
+                cell.number_format = "@"
             cell.fill = fill
 
         ws.row_dimensions[row].height = 45
