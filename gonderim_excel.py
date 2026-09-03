@@ -20,8 +20,10 @@ Sütun haritası (başlık satırı = 6, veri = 7+):
 14: Taşıma Evrağı/İrsaliye  → Taşıma No(ları)
 15: Muafiyet Kapsamında     → hesaplanır
 16: SRC5 Belgeli Şoför      → boş
-17: Yük Miktarı (KG)        → toplam kg
-18: Kontrol Formunu Dolduran → kullanıcı adı (gonderici_adi)
+17: Atık Kodu               → atık kodları (virgülle ayrık)
+18: UN No                   → UN numaraları (virgülle ayrık)
+19: Yük Miktarı (KG)        → toplam kg
+20: Kontrol Formunu Dolduran → kullanıcı adı (gonderici_adi)
 """
 from __future__ import annotations
 
@@ -55,8 +57,10 @@ COL = {
     'evraki': 14,
     'muafiyet': 15,
     'src5': 16,
-    'miktar': 17,
-    'dolduran': 18,
+    'atik_kodu': 17,
+    'un_no': 18,
+    'miktar': 19,
+    'dolduran': 20,
 }
 
 DATA_START_ROW = 6
@@ -72,7 +76,7 @@ def _template_style(ws) -> dict:
     stil = {}
     ref_row = DATA_START_ROW
     # Şablonda ilk veri satırının stilini oku
-    for c in range(1, 20):
+    for c in range(1, 21):
         cell = ws.cell(row=ref_row, column=c)
         stil[c] = {
             'font': copy(cell.font),
@@ -137,7 +141,7 @@ def _rewrite(ws, gonderimler: list[AtikGonderim], stil: dict,
             COL['tasima_turu']: 'ADR-AMBALAJLI',
             COL['tmfb_tarih']: None,
             COL['tmfb_no']: None,
-            COL['sertifika_no']: g.atik_kodlari_str,
+            COL['sertifika_no']: None,
             COL['sertifika_tarih']: None,
             COL['muayene_tarih']: None,
             COL['basinc_uygun']: 'İLGİLİ DEĞİL',
@@ -145,6 +149,8 @@ def _rewrite(ws, gonderimler: list[AtikGonderim], stil: dict,
             COL['evraki']: g.tasima_nolari_str,
             COL['muafiyet']: g.muafiyet,
             COL['src5']: None,
+            COL['atik_kodu']: g.atik_kodlari_str,
+            COL['un_no']: g.un_nolar_str,
             COL['miktar']: g.miktar_kg,
             COL['dolduran']: gonderici_adi,
         }
@@ -226,14 +232,17 @@ def process_export(
             miktar_val = ws.cell(row=row, column=COL['miktar']).value or 0
             muafiyet_val = ws.cell(row=row, column=COL['muafiyet']).value or ''
 
+            un_ham = str(ws.cell(row=row, column=COL['un_no']).value or '')
+            un_listesi = [p.strip().removeprefix('UN ').strip() for p in un_ham.split(',') if p.strip()]
+
             g_mevcut = AtikGonderim(
                 tarih=tarih_val if isinstance(tarih_val, datetime) else None,
                 tasiyici=str(tasiyici_val),
                 plaka=str(plaka_val),
                 alici='',
-                atik_kodlari=[str(ws.cell(row=row, column=COL['sertifika_no']).value or '')],
+                atik_kodlari=[str(ws.cell(row=row, column=COL['atik_kodu']).value or '')],
                 tasima_nolari=evraki_val.split(', '),
-                un_nolar=[],
+                un_nolar=un_listesi,
                 miktar_kg=float(miktar_val),
             )
             mevcut_gonderimler.append(g_mevcut)
