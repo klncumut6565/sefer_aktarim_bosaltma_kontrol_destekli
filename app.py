@@ -572,52 +572,73 @@ if st.session_state.sonuc:
                         use_container_width=True,
                     )
 
+                pdf_datalar = []  # (tasima_no_safe, dosya_adi, base64) — tek iframe'de kullanılacak
+
                 for dok in uretilen_pdf:
                     st.markdown(f"**{dok['tarih']} / {dok['plaka']}**")
                     pdf_p: Path = dok["pdf"]
                     if pdf_p and Path(pdf_p).is_file():
+                        pdf_bytes = Path(pdf_p).read_bytes()
+                        onizle_id = re.sub(r"[^a-zA-Z0-9_]", "_", str(dok["tasima_no"]))
                         pc1, pc2 = st.columns(2)
                         with pc1:
                             st.download_button(
                                 "⬇️ PDF İndir",
-                                data=Path(pdf_p).read_bytes(),
+                                data=pdf_bytes,
                                 file_name=dok["dosya_adi"].replace(".docx", ".pdf"),
                                 mime="application/pdf",
                                 key=f"gpdf_{dok['tasima_no']}",
                                 use_container_width=True,
                             )
                         with pc2:
-                            pdf_b64 = base64.b64encode(Path(pdf_p).read_bytes()).decode()
-                            onizle_id = re.sub(r"[^a-zA-Z0-9_]", "_", str(dok["tasima_no"]))
-                            # Not: data: URI'yi doğrudan <a href> ile açmak modern
-                            # tarayıcılarda (Chrome/Edge) güvenlik nedeniyle
-                            # top-level navigasyon olarak engelleniyor ve boş
-                            # sayfa gösteriyordu. Bunun yerine base64 veriyi
-                            # tarayıcıda Blob'a çevirip Blob URL ile yeni
-                            # sekmede açıyoruz.
-                            components.html(
-                                f"""
-                                <button id="btn_{onizle_id}" style="display:inline-block;width:100%;
-                                    text-align:center;padding:0.5rem 0;border:1px solid rgba(49,51,63,0.2);
-                                    border-radius:0.5rem;background:#fff;cursor:pointer;font-size:1rem;">
-                                    👁️ Yeni Sekmede Önizle
-                                </button>
-                                <script>
-                                document.getElementById("btn_{onizle_id}").addEventListener("click", function() {{
-                                    const b64 = "{pdf_b64}";
-                                    const byteChars = atob(b64);
-                                    const byteNumbers = new Array(byteChars.length);
-                                    for (let i = 0; i < byteChars.length; i++) {{
-                                        byteNumbers[i] = byteChars.charCodeAt(i);
-                                    }}
-                                    const byteArray = new Uint8Array(byteNumbers);
-                                    const blob = new Blob([byteArray], {{type: "application/pdf"}});
-                                    const url = URL.createObjectURL(blob);
-                                    window.open(url, "_blank");
-                                }});
-                                </script>
-                                """,
-                                height=45,
+                            st.markdown(
+                                f'<button id="btn_{onizle_id}" style="display:inline-block;width:100%;'
+                                f'text-align:center;padding:0.5rem 0;border:1px solid rgba(49,51,63,0.2);'
+                                f'border-radius:0.5rem;background:#fff;cursor:pointer;font-size:1rem;">'
+                                f'👁️ Yeni Sekmede Önizle</button>',
+                                unsafe_allow_html=True,
                             )
+                        # Not: base64 verisini burada değil, döngü bittikten sonra
+                        # TEK bir components.html/iframe içinde topluca gönderiyoruz.
+                        # Her satır için ayrı iframe açmak (önceki sürüm) döküman
+                        # sayısı arttıkça ciddi yavaşlamaya yol açıyordu.
+                        pdf_datalar.append((onizle_id, base64.b64encode(pdf_bytes).decode()))
                     else:
                         st.caption("PDF dönüşümü yapılamadı")
+
+                if pdf_datalar:
+                    # Not: data: URI'yi doğrudan <a href> ile açmak modern
+                    # tarayıcılarda (Chrome/Edge) güvenlik nedeniyle top-level
+                    # navigasyon olarak engelleniyor ve boş sayfa gösteriyordu.
+                    # Bunun yerine base64 veriyi tarayıcıda Blob'a çevirip
+                    # Blob URL ile yeni sekmede açıyoruz — tüm dökümanlar için
+                    # tek bir gizli iframe/script üzerinden (performans).
+                    veri_js = ",".join(
+                        f'"{oid}":"{b64}"' for oid, b64 in pdf_datalar
+                    )
+                    components.html(
+                        f"""
+                        <script>
+                        const pdfVerileri = {{{veri_js}}};
+                        function b64ToBlobUrl(b64) {{
+                            const byteChars = atob(b64);
+                            const byteNumbers = new Array(byteChars.length);
+                            for (let i = 0; i < byteChars.length; i++) {{
+                                byteNumbers[i] = byteChars.charCodeAt(i);
+                            }}
+                            const byteArray = new Uint8Array(byteNumbers);
+                            const blob = new Blob([byteArray], {{type: "application/pdf"}});
+                            return URL.createObjectURL(blob);
+                        }}
+                        for (const id in pdfVerileri) {{
+                            const btn = window.parent.document.getElementById("btn_" + id);
+                            if (btn) {{
+                                btn.addEventListener("click", function() {{
+                                    window.open(b64ToBlobUrl(pdfVerileri[id]), "_blank");
+                                }});
+                            }}
+                        }}
+                        </script>
+                        """,
+                        height=0,
+                    )
