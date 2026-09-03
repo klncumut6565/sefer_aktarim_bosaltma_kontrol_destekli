@@ -385,15 +385,18 @@ def docx_to_pdf(docx_path: Path, cikti_klasor: Path = None) -> Optional[Path]:
     return sonuc.get(docx_path)
 
 
-def docx_to_pdf_batch(docx_paths: list[Path], cikti_klasor: Path) -> dict:
-    """Birden fazla .docx dosyasını TEK bir LibreOffice (soffice) süreciyle
-    toplu olarak .pdf'e çevirir.
+def docx_to_pdf_batch(docx_paths: list[Path], cikti_klasor: Path, parca_boyu: int = 80) -> dict:
+    """Birden fazla .docx dosyasını LibreOffice (soffice) ile toplu olarak
+    .pdf'e çevirir.
 
-    Her .docx için ayrı ayrı soffice başlatmak (önceki yöntem), LibreOffice'in
-    her seferinde yeniden başlatılmasından dolayı çok yavaştı (yüzlerce
-    döküman için onlarca dakika sürebiliyordu). Tüm dosyaları tek komutta
-    vermek soffice'i sadece bir kez başlatır ve dosyaları sırayla aynı süreç
-    içinde çevirir — bu, toplu üretimde süreyi büyük ölçüde kısaltır.
+    Her .docx için ayrı ayrı soffice başlatmak (eski yöntem), LibreOffice'in
+    her seferinde yeniden başlatılmasından dolayı çok yavaştı. Tüm dosyaları
+    TEK komutta vermek ise büyük hacimlerde (test: 362 dosyada 114'ü)
+    LibreOffice'in belirli bir noktadan sonra SESSİZCE dönüşümü bırakmasına
+    yol açabiliyor (veri KARIŞMIYOR, sadece bazı PDF'ler hiç üretilmiyor).
+    Bu yüzden dosyalar makul büyüklükte gruplara (parça) bölünüp her grup
+    ayrı soffice çağrısıyla çevriliyor ve her grubun TAMAMLANDIĞI
+    doğrulanıyor; eksik çıkan dosyalar o an tek tek yeniden denenir.
 
     dict[Path, Optional[Path]] döner: her giriş .docx yolu -> üretilen .pdf
     yolu (başarısızsa None).
@@ -414,27 +417,26 @@ def docx_to_pdf_batch(docx_paths: list[Path], cikti_klasor: Path) -> dict:
     if not gecerli:
         return sonuc
 
-    # LibreOffice çok sayıda dosyayı tek komutta kabul eder; timeout'u dosya
-    # sayısına göre ölçekliyoruz (dosya başına ~20 sn üst sınır + sabit pay).
-    timeout_sn = 60 + 20 * len(gecerli)
-    try:
-        subprocess.run(
-            [soffice, "--headless", "--convert-to", "pdf", "--outdir", str(cikti_klasor)]
-            + [str(p) for p in gecerli],
-            check=True, capture_output=True, timeout=timeout_sn,
-        )
-    except Exception:
-        # Toplu çeviri tamamen başarısız olduysa dosya dosya deneyerek
-        # kurtarabildiklerimizi kurtaralım (tek bozuk dosya tüm grubu
-        # düşürmesin).
-        for p in gecerli:
-            try:
-                subprocess.run(
-                    [soffice, "--headless", "--convert-to", "pdf", "--outdir", str(cikti_klasor), str(p)],
-                    check=True, capture_output=True, timeout=60,
-                )
-            except Exception:
-                continue
+    def _soffice_cagir(dosyalar, timeout_sn):
+        try:
+            subprocess.run(
+                [soffice, "--headless", "--convert-to", "pdf", "--outdir", str(cikti_klasor)]
+                + [str(p) for p in dosyalar],
+                check=True, capture_output=True, timeout=timeout_sn,
+            )
+        except Exception:
+            pass  # sonuç kontrolü zaten aşağıda dosya varlığına bakarak yapılıyor
+
+    for i in range(0, len(gecerli), parca_boyu):
+        parca = gecerli[i:i + parca_boyu]
+        timeout_sn = 60 + 15 * len(parca)
+        _soffice_cagir(parca, timeout_sn)
+
+        eksikler = [p for p in parca if not (cikti_klasor / (p.stem + ".pdf")).is_file()]
+        if eksikler:
+            # Grup tam tamamlanmadı — eksik kalanları tek tek yeniden dene.
+            for p in eksikler:
+                _soffice_cagir([p], 60)
 
     for p in gecerli:
         pdf_yolu = cikti_klasor / (p.stem + ".pdf")
