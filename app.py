@@ -22,6 +22,7 @@ import zipfile
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from core_logic import extract_pdf_data, process_pdfs, _DOCX_DESTEGI, docx_to_pdf
 from export_islem import export_oku
@@ -587,14 +588,36 @@ if st.session_state.sonuc:
                             )
                         with pc2:
                             pdf_b64 = base64.b64encode(Path(pdf_p).read_bytes()).decode()
-                            st.markdown(
-                                f'<a href="data:application/pdf;base64,{pdf_b64}" '
-                                f'target="_blank" rel="noopener" '
-                                f'style="display:inline-block;width:100%;text-align:center;'
-                                f'padding:0.5rem 0;border:1px solid rgba(49,51,63,0.2);'
-                                f'border-radius:0.5rem;text-decoration:none;">'
-                                f'👁️ Yeni Sekmede Önizle</a>',
-                                unsafe_allow_html=True,
+                            onizle_id = re.sub(r"[^a-zA-Z0-9_]", "_", str(dok["tasima_no"]))
+                            # Not: data: URI'yi doğrudan <a href> ile açmak modern
+                            # tarayıcılarda (Chrome/Edge) güvenlik nedeniyle
+                            # top-level navigasyon olarak engelleniyor ve boş
+                            # sayfa gösteriyordu. Bunun yerine base64 veriyi
+                            # tarayıcıda Blob'a çevirip Blob URL ile yeni
+                            # sekmede açıyoruz.
+                            components.html(
+                                f"""
+                                <button id="btn_{onizle_id}" style="display:inline-block;width:100%;
+                                    text-align:center;padding:0.5rem 0;border:1px solid rgba(49,51,63,0.2);
+                                    border-radius:0.5rem;background:#fff;cursor:pointer;font-size:1rem;">
+                                    👁️ Yeni Sekmede Önizle
+                                </button>
+                                <script>
+                                document.getElementById("btn_{onizle_id}").addEventListener("click", function() {{
+                                    const b64 = "{pdf_b64}";
+                                    const byteChars = atob(b64);
+                                    const byteNumbers = new Array(byteChars.length);
+                                    for (let i = 0; i < byteChars.length; i++) {{
+                                        byteNumbers[i] = byteChars.charCodeAt(i);
+                                    }}
+                                    const byteArray = new Uint8Array(byteNumbers);
+                                    const blob = new Blob([byteArray], {{type: "application/pdf"}});
+                                    const url = URL.createObjectURL(blob);
+                                    window.open(url, "_blank");
+                                }});
+                                </script>
+                                """,
+                                height=45,
                             )
                     else:
                         st.caption("PDF dönüşümü yapılamadı")
