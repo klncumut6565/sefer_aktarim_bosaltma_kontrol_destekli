@@ -13,9 +13,12 @@ Yüklenen dosya tipine göre mod otomatik belirlenir:
 """
 from __future__ import annotations
 
+import base64
+import io
 import re
 import sys
 import tempfile
+import zipfile
 from pathlib import Path
 
 import streamlit as st
@@ -541,17 +544,57 @@ if st.session_state.sonuc:
             uretilen_pdf = r.get("_uretilen_pdf") or []
             if uretilen_pdf:
                 st.markdown("#### 📋 Gönderim Kontrol Dökümanları")
+
+                # Tüm dökümanları tek arşiv halinde indir.
+                # Not: Gerçek .rar formatı, tescilli WinRAR/rar araçlarını
+                # gerektirdiğinden bu ortamda üretilemiyor; bunun yerine
+                # aynı işlevi gören, evrensel desteklenen .zip arşivi
+                # oluşturuluyor.
+                gecerli_pdfler = [
+                    d for d in uretilen_pdf
+                    if d.get("pdf") and Path(d["pdf"]).is_file()
+                ]
+                if gecerli_pdfler:
+                    zip_buf = io.BytesIO()
+                    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                        for dok in gecerli_pdfler:
+                            pdf_p = Path(dok["pdf"])
+                            arsiv_ad = dok["dosya_adi"].replace(".docx", ".pdf")
+                            zf.write(pdf_p, arcname=arsiv_ad)
+                    zip_buf.seek(0)
+                    st.download_button(
+                        "🗜️ Tüm Gönderim Kontrol Dökümanlarını Arşiv (.zip) Olarak İndir",
+                        data=zip_buf.getvalue(),
+                        file_name="gonderim_kontrol_dokumanlari.zip",
+                        mime="application/zip",
+                        key="gonderim_zip_arsiv",
+                        use_container_width=True,
+                    )
+
                 for dok in uretilen_pdf:
                     st.markdown(f"**{dok['tarih']} / {dok['plaka']}**")
                     pdf_p: Path = dok["pdf"]
                     if pdf_p and Path(pdf_p).is_file():
-                        st.download_button(
-                            f"⬇️ PDF İndir",
-                            data=Path(pdf_p).read_bytes(),
-                            file_name=dok["dosya_adi"].replace(".docx", ".pdf"),
-                            mime="application/pdf",
-                            key=f"gpdf_{dok['tasima_no']}",
-                            use_container_width=True,
-                        )
+                        pc1, pc2 = st.columns(2)
+                        with pc1:
+                            st.download_button(
+                                "⬇️ PDF İndir",
+                                data=Path(pdf_p).read_bytes(),
+                                file_name=dok["dosya_adi"].replace(".docx", ".pdf"),
+                                mime="application/pdf",
+                                key=f"gpdf_{dok['tasima_no']}",
+                                use_container_width=True,
+                            )
+                        with pc2:
+                            pdf_b64 = base64.b64encode(Path(pdf_p).read_bytes()).decode()
+                            st.markdown(
+                                f'<a href="data:application/pdf;base64,{pdf_b64}" '
+                                f'target="_blank" rel="noopener" '
+                                f'style="display:inline-block;width:100%;text-align:center;'
+                                f'padding:0.5rem 0;border:1px solid rgba(49,51,63,0.2);'
+                                f'border-radius:0.5rem;text-decoration:none;">'
+                                f'👁️ Yeni Sekmede Önizle</a>',
+                                unsafe_allow_html=True,
+                            )
                     else:
                         st.caption("PDF dönüşümü yapılamadı")
