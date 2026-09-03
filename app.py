@@ -24,7 +24,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
-from core_logic import extract_pdf_data, process_pdfs, _DOCX_DESTEGI, docx_to_pdf
+from core_logic import extract_pdf_data, process_pdfs, _DOCX_DESTEGI, docx_to_pdf, docx_to_pdf_batch
 from export_islem import export_oku
 from gonderim_excel import process_export
 from gonderim_doldur import gonderim_dokumani_olustur
@@ -419,13 +419,16 @@ if calistir:
                                     logo_bytes=st.session_state.logo_bytes,
                                     un_miktar_str=g.un_miktar_str,
                                 )
-                                pdf_yolu = docx_to_pdf(docx_yolu, pdf_klasor)
+                                # PDF dönüşümü burada tek tek yapılmıyor — tüm
+                                # dökümanlar üretildikten sonra TOPLU olarak
+                                # (tek soffice çağrısıyla) çevriliyor, bkz. aşağı.
                                 uretilen_pdf.append({
                                     "tasima_no": g.tasima_nolari_str,
                                     "tarih": g.tarih_str,
                                     "plaka": g.plaka,
-                                    "pdf": pdf_yolu,
-                                    "dosya_adi": (pdf_yolu.name if pdf_yolu else dosya_adi),
+                                    "docx": docx_yolu,
+                                    "pdf": None,
+                                    "dosya_adi": dosya_adi,
                                 })
                                 log.append(f"  📋 {dosya_adi} oluşturuldu")
                             except Exception as exc:
@@ -439,6 +442,25 @@ if calistir:
                                 hatalar.append(hata_kaydi)
                                 log.append(f"  ❌ HATA ({g.plaka}): {type(exc).__name__}: {exc}")
                                 print(iz, file=sys.stderr)   # Streamlit Cloud loglarına düşsün
+
+                    # ---- Toplu PDF dönüşümü (tüm Gönderim Kontrol Dökümanları için TEK soffice çağrısı) ----
+                    # Önceki yöntem her döküman için ayrı soffice süreci başlatıyordu;
+                    # bu, LibreOffice'in her seferinde yeniden başlatılması yüzünden
+                    # çok sayıda dökümanda (yüzlerce sefer/plaka) ciddi yavaşlığa
+                    # yol açıyordu. Tek komutta toplu çeviri süreyi büyük ölçüde kısaltır.
+                    if uretilen_pdf:
+                        log.append(f"  🔄 {len(uretilen_pdf)} Gönderim Kontrol Dökümanı PDF'e çevriliyor (toplu)...")
+                        donusum = docx_to_pdf_batch([u["docx"] for u in uretilen_pdf], pdf_klasor)
+                        basarili = 0
+                        for u in uretilen_pdf:
+                            pdf_yolu = donusum.get(u["docx"])
+                            u["pdf"] = pdf_yolu
+                            if pdf_yolu:
+                                basarili += 1
+                                u["dosya_adi"] = pdf_yolu.name
+                        log.append(f"  📑 {basarili}/{len(uretilen_pdf)} döküman PDF'e çevrildi.")
+                        if basarili < len(uretilen_pdf):
+                            log.append("  ⚠ Bazı dökümanlar PDF'e çevrilemedi (LibreOffice hatası), .docx kullanılabilir.")
 
                 excel_sonuc["_excel_yolu"] = cikti_excel
                 excel_sonuc["_log"] = log

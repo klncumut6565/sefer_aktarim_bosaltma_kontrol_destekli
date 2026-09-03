@@ -381,24 +381,66 @@ def _rewrite(ws, yukler, style):
 def docx_to_pdf(docx_path: Path, cikti_klasor: Path = None) -> Optional[Path]:
     """LibreOffice (soffice) kullanarak .docx dosyasını .pdf'e çevirir.
     LibreOffice kurulu değilse veya çeviri başarısız olursa None döner."""
+    sonuc = docx_to_pdf_batch([docx_path], cikti_klasor or docx_path.parent)
+    return sonuc.get(docx_path)
+
+
+def docx_to_pdf_batch(docx_paths: list[Path], cikti_klasor: Path) -> dict:
+    """Birden fazla .docx dosyasını TEK bir LibreOffice (soffice) süreciyle
+    toplu olarak .pdf'e çevirir.
+
+    Her .docx için ayrı ayrı soffice başlatmak (önceki yöntem), LibreOffice'in
+    her seferinde yeniden başlatılmasından dolayı çok yavaştı (yüzlerce
+    döküman için onlarca dakika sürebiliyordu). Tüm dosyaları tek komutta
+    vermek soffice'i sadece bir kez başlatır ve dosyaları sırayla aynı süreç
+    içinde çevirir — bu, toplu üretimde süreyi büyük ölçüde kısaltır.
+
+    dict[Path, Optional[Path]] döner: her giriş .docx yolu -> üretilen .pdf
+    yolu (başarısızsa None).
+    """
     import shutil
     import subprocess
 
+    sonuc: dict = {p: None for p in docx_paths}
+    if not docx_paths:
+        return sonuc
+
     soffice = shutil.which("soffice") or shutil.which("libreoffice")
     if not soffice:
-        return None
+        return sonuc
 
-    hedef = cikti_klasor or docx_path.parent
-    hedef.mkdir(parents=True, exist_ok=True)
+    cikti_klasor.mkdir(parents=True, exist_ok=True)
+    gecerli = [p for p in docx_paths if p.is_file()]
+    if not gecerli:
+        return sonuc
+
+    # LibreOffice çok sayıda dosyayı tek komutta kabul eder; timeout'u dosya
+    # sayısına göre ölçekliyoruz (dosya başına ~20 sn üst sınır + sabit pay).
+    timeout_sn = 60 + 20 * len(gecerli)
     try:
         subprocess.run(
-            [soffice, "--headless", "--convert-to", "pdf", "--outdir", str(hedef), str(docx_path)],
-            check=True, capture_output=True, timeout=60,
+            [soffice, "--headless", "--convert-to", "pdf", "--outdir", str(cikti_klasor)]
+            + [str(p) for p in gecerli],
+            check=True, capture_output=True, timeout=timeout_sn,
         )
     except Exception:
-        return None
-    pdf_yolu = hedef / (docx_path.stem + ".pdf")
-    return pdf_yolu if pdf_yolu.is_file() else None
+        # Toplu çeviri tamamen başarısız olduysa dosya dosya deneyerek
+        # kurtarabildiklerimizi kurtaralım (tek bozuk dosya tüm grubu
+        # düşürmesin).
+        for p in gecerli:
+            try:
+                subprocess.run(
+                    [soffice, "--headless", "--convert-to", "pdf", "--outdir", str(cikti_klasor), str(p)],
+                    check=True, capture_output=True, timeout=60,
+                )
+            except Exception:
+                continue
+
+    for p in gecerli:
+        pdf_yolu = cikti_klasor / (p.stem + ".pdf")
+        if pdf_yolu.is_file():
+            sonuc[p] = pdf_yolu
+    return sonuc
 
 
 def process_pdfs(excel_path: Path, pdf_paths: list[Path], output_path: Path, log_cb=None, 
@@ -488,17 +530,11 @@ def process_pdfs(excel_path: Path, pdf_paths: list[Path], output_path: Path, log
                 docx_uretilen += 1
                 emit(f"  📋 Kontrol dökümanı oluşturuldu → {docx_yolu.name}")
 
-                pdf_yolu = None
-                if docx_pdf_donustur:
-                    pdf_yolu = docx_to_pdf(docx_yolu, hedef_klasor)
-                    if pdf_yolu:
-                        emit(f"  📑 PDF'e çevrildi → {pdf_yolu.name}")
-                    else:
-                        emit(f"  ⚠ PDF dönüşümü başarısız (LibreOffice bulunamadı/hata), .docx kullanılabilir.")
-
-                # Excel'deki Sefer No hücresine eklenecek köprü: Excel çıktısının
-                # bulunduğu klasöre göre GÖRECELİ yol (PDF varsa PDF'e, yoksa DOCX'e).
-                hedef_dosya = pdf_yolu or docx_yolu
+                # PDF dönüşümü artık tek tek değil, döngü bittikten sonra
+                # TOPLU olarak yapılıyor (bkz. aşağıdaki toplu dönüşüm bloğu).
+                # Şimdilik hyperlink docx'e işaret eder, PDF hazır olunca
+                # güncellenir.
+                hedef_dosya = docx_yolu
                 try:
                     goreceli_yol = os.path.relpath(hedef_dosya, start=output_path.parent)
                 except ValueError:
@@ -506,11 +542,37 @@ def process_pdfs(excel_path: Path, pdf_paths: list[Path], output_path: Path, log
                 for y in yukler:
                     y.kontrol_dokumani_yolu = goreceli_yol
 
-                uretilen_dosyalar.append({"sefer_no": sn, "docx": docx_yolu, "pdf": pdf_yolu})
+                uretilen_dosyalar.append({"sefer_no": sn, "docx": docx_yolu, "pdf": None, "_yukler": yukler})
             except Exception as exc:
                 emit(f"  ⚠ Kontrol dökümanı oluşturulamadı ({sn}): {exc}")
         elif docx_uret and not _DOCX_DESTEGI:
             emit("  ⚠ docx_doldur modülü/python-docx kurulu değil, kontrol dökümanı atlandı.")
+
+    # ---- Toplu PDF dönüşümü (tüm boşaltma kontrol dökümanları için TEK soffice çağrısı) ----
+    if docx_pdf_donustur and uretilen_dosyalar:
+        hedef_klasor = docx_cikti_klasor or output_path.parent
+        emit(f"  🔄 {len(uretilen_dosyalar)} kontrol dökümanı PDF'e çevriliyor (toplu)...")
+        donusum = docx_to_pdf_batch([u["docx"] for u in uretilen_dosyalar], hedef_klasor)
+        basarili = 0
+        for u in uretilen_dosyalar:
+            pdf_yolu = donusum.get(u["docx"])
+            u["pdf"] = pdf_yolu
+            if pdf_yolu:
+                basarili += 1
+                hedef_dosya = pdf_yolu
+                try:
+                    goreceli_yol = os.path.relpath(hedef_dosya, start=output_path.parent)
+                except ValueError:
+                    goreceli_yol = str(hedef_dosya)
+                for y in u["_yukler"]:
+                    y.kontrol_dokumani_yolu = goreceli_yol
+            u.pop("_yukler", None)
+        emit(f"  📑 {basarili}/{len(uretilen_dosyalar)} döküman PDF'e çevrildi.")
+        if basarili < len(uretilen_dosyalar):
+            emit("  ⚠ Bazı dökümanlar PDF'e çevrilemedi (LibreOffice hatası), .docx kullanılabilir.")
+    else:
+        for u in uretilen_dosyalar:
+            u.pop("_yukler", None)
 
     if not yeni:
         emit("Eklenecek yeni sefer bulunamadı.")
