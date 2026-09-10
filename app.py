@@ -26,6 +26,10 @@ from core_logic import extract_pdf_data, process_pdfs, _DOCX_DESTEGI, docx_to_pd
 from export_islem import export_oku
 from gonderim_excel import process_export
 from gonderim_doldur import gonderim_dokumani_olustur
+try:
+    from docx_doldur import kontrol_dokumani_olustur
+except ImportError:
+    kontrol_dokumani_olustur = None
 
 st.set_page_config(
     page_title="Sefer Aktarım & Atık Gönderim",
@@ -294,6 +298,21 @@ elif mod == "gonderim":
             else:
                 st.caption("İşaretlerseniz gönderen ve şoför bilgilerini girin.")
 
+        st.subheader("6️⃣ Boşaltma Kontrol Dökümanı")
+        with st.container(border=True, key="gonderim_bosaltma_karti"):
+            gonderim_bosaltma_uret = st.checkbox(
+                "**📋 Her grup için Boşaltma Kontrol Dökümanı da oluştur**",
+                disabled=not _DOCX_DESTEGI,
+                key="gonderim_bosaltma_uret",
+            )
+            if gonderim_bosaltma_uret and _DOCX_DESTEGI:
+                st.success("✅ Aktif — aynı şablon (Boşaltma Kontrol Dökümanı) her grup için de üretilecek.")
+                bosaltan_adi_g = st.text_input("Boşaltan Adı Soyadı", key="bosaltan_adi_g", placeholder="Ad Soyad")
+            elif not _DOCX_DESTEGI:
+                st.warning("python-docx kurulu değil.")
+            else:
+                st.caption("İşaretlerseniz boşaltan kişinin adını girin (şoför bilgisi yukarıdaki alandan alınır).")
+
     st.divider()
 
 # ---------------------------------------------------------------------------
@@ -460,9 +479,69 @@ if calistir:
                         if basarili < len(uretilen_pdf):
                             log.append("  ⚠ Bazı dökümanlar PDF'e çevrilemedi (LibreOffice hatası), .docx kullanılabilir.")
 
+                # Boşaltma Kontrol Dökümanları (aynı şablon, gönderim grupları için)
+                uretilen_bosaltma_pdf = []
+                if st.session_state.get("gonderim_bosaltma_uret") and _DOCX_DESTEGI:
+                    sablon_bosaltma_docx = Path(__file__).parent / "Bosaltma_Kontrol_Sablonu.docx"
+                    bosaltma_klasor = CALISMA_KLASORU / "gonderim_bosaltma_kontrol"
+                    bosaltma_klasor.mkdir(exist_ok=True)
+                    bosaltan_adi_g_val = st.session_state.get("bosaltan_adi_g", "")
+                    for g in gonderimler:
+                        try:
+                            guvenli_firma = re.sub(r'[^\w\s]', '', gonderici_firma_val)[:20].strip().replace(' ', '_')
+                            dosya_adi_b = f"Bosaltma_{g.dosya_adi_parcasi}_{guvenli_firma}.docx"
+                            docx_yolu_b = bosaltma_klasor / dosya_adi_b
+                            kontrol_dokumani_olustur(
+                                sablon_path=sablon_bosaltma_docx,
+                                cikti_path=docx_yolu_b,
+                                tarih=g.tarih_str,
+                                gonderici_unvan=gonderici_firma_val,
+                                tasiyici_unvan=g.tasiyici,
+                                plaka=g.plaka,
+                                sefer_un_listesi=f"Taşıma No: {g.tasima_nolari_str} — {g.un_nolar_str}",
+                                bosaltan_adi=bosaltan_adi_g_val,
+                                sofor_adi=sofor_adi_g_val,
+                                logo_bytes=st.session_state.logo_bytes,
+                                tasima_turu="ADR-AMBALAJLI",
+                            )
+                            uretilen_bosaltma_pdf.append({
+                                "tasima_no": g.tasima_nolari_str,
+                                "tarih": g.tarih_str,
+                                "plaka": g.plaka,
+                                "docx": docx_yolu_b,
+                                "pdf": None,
+                                "dosya_adi": dosya_adi_b,
+                            })
+                            log.append(f"  📋 {dosya_adi_b} oluşturuldu")
+                        except Exception as exc:
+                            import traceback
+                            iz = traceback.format_exc()
+                            hatalar.append({
+                                "baslik": f"Boşaltma Kontrol — {g.tarih_str} / {g.plaka}",
+                                "mesaj": f"{type(exc).__name__}: {exc}",
+                                "iz": iz,
+                            })
+                            log.append(f"  ❌ HATA (Boşaltma Kontrol, {g.plaka}): {type(exc).__name__}: {exc}")
+                            print(iz, file=sys.stderr)
+
+                    if uretilen_bosaltma_pdf:
+                        log.append(f"  🔄 {len(uretilen_bosaltma_pdf)} Boşaltma Kontrol Dökümanı PDF'e çevriliyor (toplu)...")
+                        donusum_b = docx_to_pdf_batch([u["docx"] for u in uretilen_bosaltma_pdf], bosaltma_klasor)
+                        basarili_b = 0
+                        for u in uretilen_bosaltma_pdf:
+                            pdf_yolu_b = donusum_b.get(u["docx"])
+                            u["pdf"] = pdf_yolu_b
+                            if pdf_yolu_b:
+                                basarili_b += 1
+                                u["dosya_adi"] = pdf_yolu_b.name
+                        log.append(f"  📑 {basarili_b}/{len(uretilen_bosaltma_pdf)} döküman PDF'e çevrildi.")
+                        if basarili_b < len(uretilen_bosaltma_pdf):
+                            log.append("  ⚠ Bazı Boşaltma Kontrol dökümanları PDF'e çevrilemedi (LibreOffice hatası), .docx kullanılabilir.")
+
                 excel_sonuc["_excel_yolu"] = cikti_excel
                 excel_sonuc["_log"] = log
                 excel_sonuc["_uretilen_pdf"] = uretilen_pdf
+                excel_sonuc["_uretilen_bosaltma_pdf"] = uretilen_bosaltma_pdf
                 excel_sonuc["_hatalar"] = hatalar
                 excel_sonuc["_uyarilar"] = uyarilar
                 st.session_state.sonuc = {"tip": "gonderim", "veri": excel_sonuc}
@@ -602,6 +681,46 @@ if st.session_state.sonuc:
                             file_name=dok["dosya_adi"].replace(".docx", ".pdf"),
                             mime="application/pdf",
                             key=f"gpdf_{dok['tasima_no']}",
+                            use_container_width=True,
+                        )
+                    else:
+                        st.caption("PDF dönüşümü yapılamadı")
+
+            uretilen_bosaltma_pdf = r.get("_uretilen_bosaltma_pdf") or []
+            if uretilen_bosaltma_pdf:
+                st.markdown("#### 📋 Boşaltma Kontrol Dökümanları")
+
+                gecerli_bosaltma_pdfler = [
+                    d for d in uretilen_bosaltma_pdf
+                    if d.get("pdf") and Path(d["pdf"]).is_file()
+                ]
+                if gecerli_bosaltma_pdfler:
+                    zip_buf_b = io.BytesIO()
+                    with zipfile.ZipFile(zip_buf_b, "w", zipfile.ZIP_DEFLATED) as zf:
+                        for dok in gecerli_bosaltma_pdfler:
+                            pdf_p = Path(dok["pdf"])
+                            arsiv_ad = dok["dosya_adi"].replace(".docx", ".pdf")
+                            zf.write(pdf_p, arcname=arsiv_ad)
+                    zip_buf_b.seek(0)
+                    st.download_button(
+                        "🗜️ Tüm Boşaltma Kontrol Dökümanlarını Arşiv (.zip) Olarak İndir",
+                        data=zip_buf_b.getvalue(),
+                        file_name="bosaltma_kontrol_dokumanlari.zip",
+                        mime="application/zip",
+                        key="gonderim_bosaltma_zip_arsiv",
+                        use_container_width=True,
+                    )
+
+                for dok in uretilen_bosaltma_pdf:
+                    st.markdown(f"**{dok['tarih']} / {dok['plaka']}**")
+                    pdf_p: Path = dok["pdf"]
+                    if pdf_p and Path(pdf_p).is_file():
+                        st.download_button(
+                            "⬇️ PDF İndir",
+                            data=Path(pdf_p).read_bytes(),
+                            file_name=dok["dosya_adi"].replace(".docx", ".pdf"),
+                            mime="application/pdf",
+                            key=f"bpdf_{dok['tasima_no']}",
                             use_container_width=True,
                         )
                     else:
