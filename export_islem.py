@@ -531,7 +531,8 @@ class AtikGonderim:
     tarih: datetime
     tasiyici: str                    # Temizlenmiş taşıyıcı firma adı
     plaka: str
-    alici: str                       # Temizlenmiş alıcı firma adı
+    alici: str                       # Temizlenmiş alıcı firma adı (GİDEN için; GELEN'de boş kalıp UI'dan doldurulur)
+    gonderen: str = ''               # Temizlenmiş gönderen/üretici firma adı (GELEN için)
     # Aşağıdakiler birden fazla atık kodu olabilir (virgülle birleştirilir)
     atik_kodlari: list[str] = field(default_factory=list)   # ['08 01 11*', '15 01 10*']
     tasima_nolari: list[str] = field(default_factory=list)  # ['E8433002', 'E8432994']
@@ -556,6 +557,17 @@ class AtikGonderim:
     def un_nolar_str(self) -> str:
         unique = list(dict.fromkeys(self.un_nolar))  # sıra koruyarak deduplicate
         return ', '.join(f'UN {u}' for u in unique)
+
+    @property
+    def urun_adlari_str(self) -> str:
+        """ADR sevkiyat adlarının (Ürün Adı) tekrarsız, virgülle ayrık listesi."""
+        seen, adlar = set(), []
+        for s in self._satirlar:
+            ad = s.get('urun_adi', '')
+            if ad and ad not in seen:
+                seen.add(ad)
+                adlar.append(ad)
+        return ', '.join(adlar)
 
     # Ham satirlar (puan hesabı için saklanır)
     _satirlar: list = field(default_factory=list)
@@ -730,5 +742,148 @@ def export_oku(dosya_path: str | Path) -> tuple[list[AtikGonderim], list[str]]:
         ))
 
     # Tarihe göre sırala
+    gonderimler.sort(key=lambda g: g.tarih or datetime.min)
+    return gonderimler, uyarilar
+
+
+def gelen_oku(dosya_path: str | Path) -> tuple[list[AtikGonderim], list[str]]:
+    """
+    Tesise GELEN atık taşımaları export XLS/XLSX dosyasını okur, gruplar ve
+    işler. export_oku() ile aynı mantık, ancak yön tersine döner:
+    - 'Üretici' sütunu, atığı GÖNDEREN (üreten) firmadır (bu depoda saklanır).
+    - Dosyada bir 'Alıcı' sütunu YOKTUR — alıcı, tesisin kendisidir ve bu
+      bilgi burada değil, döküman/Excel üretilirken arayüzden (kullanıcı
+      girdisi) tek bir değer olarak tüm gruplara uygulanır.
+
+    Returns:
+        (gonderimler, uyarilar)
+        gonderimler: her Tarih+Plaka+Taşıyıcı grubu için bir AtikGonderim nesnesi
+                     (alici alanı boş bırakılır, gonderen alanı doldurulur)
+        uyarilar: bilinmeyen atık kodları veya eksik veri uyarıları
+    """
+    dosya_path = Path(dosya_path)
+    engine = 'xlrd' if dosya_path.suffix.lower() == '.xls' else 'openpyxl'
+
+    try:
+        df = pd.read_excel(dosya_path, engine=engine, header=None, dtype=str)
+    except Exception as e:
+        raise ValueError(f"Dosya okunamadı: {e}")
+
+    header_row = None
+    for i, row in df.iterrows():
+        vals = [str(v).strip() for v in row if str(v).strip() != 'nan']
+        if 'Taşıma Numarası' in vals or 'Taşıma No' in vals:
+            header_row = i
+            break
+
+    if header_row is None:
+        raise ValueError("Gelen dosyasında başlık satırı bulunamadı.")
+
+    df.columns = df.iloc[header_row]
+    df = df.iloc[header_row + 1:].reset_index(drop=True)
+    df = df.dropna(how='all')
+
+    col_map = {}
+    for col in df.columns:
+        col_str = str(col).strip()
+        if 'Taşıma Numarası' in col_str or 'Taşıma No' in col_str:
+            col_map['tasima_no'] = col
+        elif 'Atık' in col_str and 'kodu' not in col_str.lower():
+            col_map['atik_kodu'] = col
+        elif 'Miktar' in col_str:
+            col_map['miktar'] = col
+        elif 'Taşıyıcı' in col_str:
+            col_map['tasiyici'] = col
+        elif 'Plaka' in col_str:
+            col_map['plaka'] = col
+        elif 'Üretici' in col_str:
+            col_map['gonderen'] = col
+        elif 'Yükleme Zamanı' in col_str or 'Boşaltma Zamanı' in col_str or 'Tarih' in col_str:
+            col_map['tarih'] = col
+
+    gerekli = ['tasima_no', 'atik_kodu', 'miktar', 'tasiyici', 'plaka', 'gonderen', 'tarih']
+    eksik = [k for k in gerekli if k not in col_map]
+    if eksik:
+        raise ValueError(f"Gelen dosyasında sütunlar bulunamadı: {eksik}")
+
+    uyarilar = []
+    gruplar: dict[tuple, list[dict]] = {}
+
+    for _, row in df.iterrows():
+        tasima_no = str(row[col_map['tasima_no']]).strip()
+        if not tasima_no or tasima_no == 'nan':
+            continue
+
+        atik_ham = str(row[col_map['atik_kodu']]).strip()
+        atik_norm = _normalize_atik_kodu(atik_ham)
+        miktar = _parse_miktar(row[col_map['miktar']])
+        tasiyici = _temizle_firma(row[col_map['tasiyici']])
+        plaka = str(row[col_map['plaka']]).strip()
+        gonderen = _temizle_firma(row[col_map['gonderen']])
+
+        tarih_ham = row[col_map['tarih']]
+        if isinstance(tarih_ham, datetime):
+            tarih = tarih_ham
+        else:
+            try:
+                tarih = pd.to_datetime(tarih_ham)
+            except Exception:
+                tarih = None
+
+        adr = _atik_adr_bul(atik_ham)
+        if adr is None:
+            uyarilar.append(f"Bilinmeyen atık kodu: {atik_ham} (Taşıma No: {tasima_no})")
+
+        tarih_gun = tarih.date() if tarih else None
+        grup_key = (tarih_gun, plaka.upper(), tasiyici)
+
+        if grup_key not in gruplar:
+            gruplar[grup_key] = []
+
+        gruplar[grup_key].append({
+            'tasima_no': tasima_no,
+            'atik_norm': atik_norm,
+            'un_no': adr['un_no'] if adr else '',
+            'urun_adi': adr['sevkiyat_adi'] if adr else '',
+            'tasima_kategorisi': adr['tasimaKategorisi'] if adr else 3,
+            'miktar': miktar,
+            'tarih': tarih,
+            'tasiyici': tasiyici,
+            'plaka': plaka,
+            'gonderen': gonderen,
+        })
+
+    gonderimler: list[AtikGonderim] = []
+    for grup_key, satirlar in gruplar.items():
+        ilk = satirlar[0]
+        toplam_miktar = sum(s['miktar'] for s in satirlar)
+        min_kategori = min(s['tasima_kategorisi'] for s in satirlar)
+        seen_atik, seen_no, seen_un = set(), set(), []
+        atik_listesi, no_listesi, un_listesi = [], [], []
+        for s in satirlar:
+            if s['atik_norm'] not in seen_atik:
+                seen_atik.add(s['atik_norm'])
+                atik_listesi.append(s['atik_norm'])
+            if s['tasima_no'] not in seen_no:
+                seen_no.add(s['tasima_no'])
+                no_listesi.append(s['tasima_no'])
+            if s['un_no'] and s['un_no'] not in seen_un:
+                seen_un.append(s['un_no'])
+                un_listesi.append(s['un_no'])
+
+        gonderimler.append(AtikGonderim(
+            tarih=ilk['tarih'],
+            tasiyici=ilk['tasiyici'],
+            plaka=ilk['plaka'],
+            alici='',                      # tesisin kendisi — arayüzden doldurulur
+            gonderen=ilk['gonderen'],
+            atik_kodlari=atik_listesi,
+            tasima_nolari=no_listesi,
+            un_nolar=un_listesi,
+            miktar_kg=toplam_miktar,
+            tasima_kategorisi=min_kategori,
+            _satirlar=satirlar,
+        ))
+
     gonderimler.sort(key=lambda g: g.tarih or datetime.min)
     return gonderimler, uyarilar

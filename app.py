@@ -22,8 +22,8 @@ from pathlib import Path
 
 import streamlit as st
 
-from core_logic import extract_pdf_data, process_pdfs, _DOCX_DESTEGI, docx_to_pdf, docx_to_pdf_batch
-from export_islem import export_oku
+from core_logic import extract_pdf_data, process_pdfs, _DOCX_DESTEGI, docx_to_pdf, docx_to_pdf_batch, yuk_gruplari_gelen_excelden
+from export_islem import export_oku, gelen_oku
 from gonderim_excel import process_export
 from gonderim_doldur import gonderim_dokumani_olustur
 try:
@@ -147,12 +147,16 @@ with col_excel:
 
 with col_kaynak:
     st.subheader("2️⃣ Kaynak Dosyalar")
-    st.caption("**PDF** → Boşaltma modülü  |  **XLS/XLSX** → Gönderim modülü")
+    st.caption("**PDF** / **Gelen Export** → Boşaltma modülü  |  **Giden Export** → Gönderim modülü")
     pdf_dosyalari = st.file_uploader(
         "Sefer bildirimi PDF'leri (boşaltma için)",
         type=["pdf"],
         accept_multiple_files=True,
         key="pdf_uploader",
+    )
+    gelen_dosya = st.file_uploader(
+        "Tesise Gelen Atıklar — Export XLS/XLSX dosyası (boşaltma için)",
+        key="gelen_uploader",
     )
     export_dosya = st.file_uploader(
         "Atık Gönderim — Export XLS/XLSX dosyası (gönderim için)",
@@ -161,7 +165,7 @@ with col_kaynak:
 
 # Mod algılama
 yeni_mod = None
-if pdf_dosyalari:
+if pdf_dosyalari or gelen_dosya:
     yeni_mod = "bosaltma"
 elif export_dosya:
     yeni_mod = "gonderim"
@@ -210,6 +214,14 @@ if mod == "bosaltma":
             else:
                 st.caption("İşaretlerseniz aşağıda plaka başına tarih bilgileri istenecek.")
 
+        if gelen_dosya:
+            alici_unvan = st.text_input(
+                "Alıcı Firma Unvanı (tesisin kendi unvanı)",
+                key="alici_unvan_gelen",
+                placeholder="Örn: 4R ÇEVRE VE ENERJİ SANAYİ VE TİCARET A.Ş.",
+                help="Gelen dosyasında tesis bilgisi yer almaz; tüm satırlara bu unvan uygulanır.",
+            )
+
     plaka_ek_tarihler: dict = {}
     plaka_muayene_tarihleri: dict = {}
 
@@ -235,6 +247,39 @@ if mod == "bosaltma":
                     with st.container(border=True):
                         st.markdown(f"**🚛 Plaka: {plaka}**")
                         st.caption(pdf_adi)
+                        ara = st.text_input("Ara Muayene Tarihi", key=f"ara_{plaka}", placeholder="GG.AA.YYYY")
+                        yangin = st.text_input("Yangın Tüpü Geçerlilik", key=f"yangin_{plaka}", placeholder="GG.AA.YYYY")
+                        tmfb = st.text_input("TMFB Geçerlilik", key=f"tmfb_{plaka}", placeholder="GG.AA.YYYY")
+                        periyodik = st.text_input("Periyodik Muayene", key=f"periyodik_{plaka}", placeholder="GG.AA.YYYY")
+                        adr = st.text_input("ADR Uygunluk Geçerlilik", key=f"adr_{plaka}", placeholder="GG.AA.YYYY")
+                    if ara:
+                        plaka_muayene_tarihleri[plaka] = ara
+                    ek = {}
+                    if yangin: ek["yangin_tup"] = yangin
+                    if tmfb: ek["tmfb"] = tmfb
+                    if adr: ek["adr_uygunluk"] = adr
+                    if periyodik: ek["periyodik_muayene"] = periyodik
+                    if ek:
+                        plaka_ek_tarihler[plaka] = ek
+
+    elif docx_uret and _DOCX_DESTEGI and gelen_dosya:
+        st.divider()
+        st.subheader("🗓️ Araç Muayene ve Geçerlilik Tarihleri")
+        try:
+            tmp_gelen = CALISMA_KLASORU / gelen_dosya.name
+            tmp_gelen.write_bytes(gelen_dosya.getvalue())
+            gelen_on, _ = gelen_oku(tmp_gelen)
+            gecici_plakalar = list(dict.fromkeys(g.plaka for g in gelen_on))
+        except Exception:
+            gecici_plakalar = []
+
+        for i in range(0, len(gecici_plakalar), 2):
+            cift = gecici_plakalar[i:i + 2]
+            grid_cols = st.columns(2)
+            for col, plaka in zip(grid_cols, cift):
+                with col:
+                    with st.container(border=True):
+                        st.markdown(f"**🚛 Plaka: {plaka}**")
                         ara = st.text_input("Ara Muayene Tarihi", key=f"ara_{plaka}", placeholder="GG.AA.YYYY")
                         yangin = st.text_input("Yangın Tüpü Geçerlilik", key=f"yangin_{plaka}", placeholder="GG.AA.YYYY")
                         tmfb = st.text_input("TMFB Geçerlilik", key=f"tmfb_{plaka}", placeholder="GG.AA.YYYY")
@@ -326,8 +371,10 @@ if calistir:
         excel_modu_val = st.session_state.get("excel_modu", "guncelle")
         if excel_modu_val == "guncelle" and not excel_dosya:
             st.error("Lütfen bir Excel dosyası yükleyin.")
-        elif not pdf_dosyalari:
-            st.error("Lütfen en az bir PDF dosyası yükleyin.")
+        elif not pdf_dosyalari and not gelen_dosya:
+            st.error("Lütfen en az bir PDF veya Tesise Gelen Atıklar Export dosyası yükleyin.")
+        elif gelen_dosya and not pdf_dosyalari and not st.session_state.get("alici_unvan_gelen", "").strip():
+            st.error("Lütfen Alıcı Firma Unvanı (tesisin kendi unvanı) girin.")
         else:
             with st.spinner("İşleniyor…"):
                 excel_yolu = CALISMA_KLASORU / "girdi.xlsx"
@@ -339,28 +386,63 @@ if calistir:
                     excel_yolu.write_bytes(excel_dosya.getvalue())
                     cikti_excel = CALISMA_KLASORU / f"{Path(excel_dosya.name).stem}_guncel.xlsx"
 
-                pdf_yollari = []
-                for pf in pdf_dosyalari:
-                    p = CALISMA_KLASORU / pf.name
-                    p.write_bytes(pf.getvalue())
-                    pdf_yollari.append(p)
-
                 log = []
-                bosaltma_sonuc = process_pdfs(
-                    excel_path=excel_yolu,
-                    pdf_paths=pdf_yollari,
-                    output_path=cikti_excel,
-                    log_cb=log.append,
-                    muayene_tarihleri=plaka_muayene_tarihleri,
-                    tasima_turu=tasima_turu,
-                    ek_tarihler=plaka_ek_tarihler,
-                    docx_uret=docx_uret,
-                    docx_cikti_klasor=CALISMA_KLASORU / "kontrol_dokumanlari",
-                    bosaltan_adi=st.session_state.get("bosaltan_adi", ""),
-                    sofor_adi=st.session_state.get("sofor_adi", ""),
-                    docx_pdf_donustur=True,
-                    logo_bytes=st.session_state.logo_bytes,
-                )
+
+                if pdf_dosyalari:
+                    pdf_yollari = []
+                    for pf in pdf_dosyalari:
+                        p = CALISMA_KLASORU / pf.name
+                        p.write_bytes(pf.getvalue())
+                        pdf_yollari.append(p)
+
+                    bosaltma_sonuc = process_pdfs(
+                        excel_path=excel_yolu,
+                        pdf_paths=pdf_yollari,
+                        output_path=cikti_excel,
+                        log_cb=log.append,
+                        muayene_tarihleri=plaka_muayene_tarihleri,
+                        tasima_turu=tasima_turu,
+                        ek_tarihler=plaka_ek_tarihler,
+                        docx_uret=docx_uret,
+                        docx_cikti_klasor=CALISMA_KLASORU / "kontrol_dokumanlari",
+                        bosaltan_adi=st.session_state.get("bosaltan_adi", ""),
+                        sofor_adi=st.session_state.get("sofor_adi", ""),
+                        docx_pdf_donustur=True,
+                        logo_bytes=st.session_state.logo_bytes,
+                    )
+                else:
+                    # ---- Tesise GELEN Atıklar Export XLS/XLSX ----
+                    tmp_gelen = CALISMA_KLASORU / gelen_dosya.name
+                    tmp_gelen.write_bytes(gelen_dosya.getvalue())
+                    try:
+                        gelen_gruplar, gelen_uyarilar = gelen_oku(tmp_gelen)
+                    except Exception as e:
+                        st.error(f"Gelen dosyası okunamadı: {e}")
+                        st.stop()
+
+                    alici_unvan_val = st.session_state.get("alici_unvan_gelen", "").strip()
+                    sefer_gruplari = yuk_gruplari_gelen_excelden(
+                        gelen_gruplar, alici_unvan=alici_unvan_val, tasima_turu=tasima_turu,
+                    )
+
+                    bosaltma_sonuc = process_pdfs(
+                        excel_path=excel_yolu,
+                        pdf_paths=[],
+                        sefer_gruplari=sefer_gruplari,
+                        output_path=cikti_excel,
+                        log_cb=log.append,
+                        muayene_tarihleri=plaka_muayene_tarihleri,
+                        tasima_turu=tasima_turu,
+                        ek_tarihler=plaka_ek_tarihler,
+                        docx_uret=docx_uret,
+                        docx_cikti_klasor=CALISMA_KLASORU / "kontrol_dokumanlari",
+                        bosaltan_adi=st.session_state.get("bosaltan_adi", ""),
+                        sofor_adi=st.session_state.get("sofor_adi", ""),
+                        docx_pdf_donustur=True,
+                        logo_bytes=st.session_state.logo_bytes,
+                    )
+                    bosaltma_sonuc["_uyarilar"] = gelen_uyarilar
+
                 bosaltma_sonuc["_excel_yolu"] = cikti_excel
                 bosaltma_sonuc["_log"] = log
                 st.session_state.sonuc = {"tip": "bosaltma", "veri": bosaltma_sonuc}
@@ -590,8 +672,8 @@ if st.session_state.sonuc:
     with st.expander("İşlem Günlüğü", expanded=bool(hatalar)):
         st.code("\n".join(r.get("_log", [])), language=None)
 
-    # Uyarılar (gönderim modülü)
-    if tip == "gonderim" and r.get("_uyarilar"):
+    # Uyarılar (gönderim ve GELEN-tabanlı boşaltma modülü)
+    if r.get("_uyarilar"):
         with st.expander(f"⚠️ {len(r['_uyarilar'])} Uyarı"):
             for u in r["_uyarilar"]:
                 st.caption(u)

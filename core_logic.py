@@ -33,6 +33,45 @@ except Exception:
     _DOCX_DESTEGI = False
 
 
+def yuk_gruplari_gelen_excelden(gonderimler: list, alici_unvan: str,
+                                 tasima_turu: str = "ADR-AMBALAJLI") -> list:
+    """export_islem.gelen_oku() ile okunan tesise GELEN atık gruplarını,
+    process_pdfs() ile aynı Excel/Kontrol Dökümanı üretim mantığını
+    kullanabilmek için (sefer_no, yukler, plaka_sabit) üçlülerine çevirir.
+
+    Her AtikGonderim grubundaki HER HAM SATIR (her Taşıma Numarası/atık
+    kodu) ayrı bir Yuk satırı olur — PDF'den okunan bir seferin birden
+    fazla yük satırı taşıyabilmesiyle aynı mantık.
+    alici_unvan: Tesisin kendi unvanı (dosyada yok, arayüzden gelir; tüm
+        satırlara uygulanır).
+    """
+    sonuc = []
+    for g in gonderimler:
+        yukler = []
+        for s in g._satirlar:
+            yukler.append(Yuk(
+                sefer_no=g.tasima_nolari_str,
+                plaka=g.plaka,
+                tarih=g.tarih,
+                src_sofor="",
+                tasiyici_unvan=g.tasiyici,
+                gonderen_vn="",
+                gonderen=g.gonderen,
+                alici_vn="",
+                alici=alici_unvan,
+                un_no=s.get('un_no', ''),
+                urun_adi=s.get('urun_adi', ''),
+                miktar=s.get('miktar', 0),
+                birim="Kg",
+                tasima_turu=tasima_turu,
+                plaka_sabit=g.plaka,
+                muafiyet=g.muafiyet,
+            ))
+        if yukler:
+            sonuc.append((g.tasima_nolari_str, yukler, g.plaka))
+    return sonuc
+
+
 def _resource_path(relative_path: str) -> Path:
     """Hem `python sefer_aktarim_zebra.py` ile hem de PyInstaller exe içinde
     çalışırken aynı dosyayı (örn. logo.ico) doğru konumdan bulur."""
@@ -456,7 +495,8 @@ def process_pdfs(excel_path: Path, pdf_paths: list[Path], output_path: Path, log
                                    bosaltan_adi: str = "",
                                    sofor_adi: str = "",
                                    docx_pdf_donustur: bool = False,
-                                   logo_bytes: Optional[bytes] = None) -> dict:
+                                   logo_bytes: Optional[bytes] = None,
+                                   sefer_gruplari: Optional[list] = None) -> dict:
     """
     ek_tarihler: plaka -> {
         "yangin_tup": "GG.AA.YYYY", "tmfb": "...", "adr_uygunluk": "...",
@@ -466,6 +506,10 @@ def process_pdfs(excel_path: Path, pdf_paths: list[Path], output_path: Path, log
     docx_cikti_klasor: docx dosyalarının kaydedileceği klasör (None ise excel ile aynı klasör).
     docx_pdf_donustur: True ise üretilen .docx ayrıca .pdf'e çevrilir (LibreOffice gerektirir,
         web/Streamlit ortamı için). Sonuçta hem docx hem pdf yolu döner.
+    sefer_gruplari: verilirse pdf_paths/extract_pdf_data YERİNE bu hazır gruplar kullanılır.
+        Liste elemanları: (sefer_no: str, yukler: list[Yuk], plaka_sabit: str).
+        Bu, PDF dışı kaynaklardan (örn. tesise GELEN atık export XLS'i) aynı Excel/Kontrol
+        Dökümanı üretim mantığını yeniden kullanmayı sağlar.
     """
     def emit(msg):
         log.info(msg)
@@ -479,13 +523,22 @@ def process_pdfs(excel_path: Path, pdf_paths: list[Path], output_path: Path, log
     yeni, atlanan, eklenen = [], 0, 0
     docx_uretilen = 0
     uretilen_dosyalar = []  # [{"sefer_no": ..., "docx": Path, "pdf": Path|None}, ...]
-    for pdf in pdf_paths:
-        emit(f"📄 İşleniyor: {pdf.name}")
-        yukler, plaka_sabit = extract_pdf_data(pdf, tasima_turu_secimi=tasima_turu)
+
+    if sefer_gruplari is not None:
+        kaynak = sefer_gruplari
+    else:
+        kaynak = []
+        for pdf in pdf_paths:
+            emit(f"📄 İşleniyor: {pdf.name}")
+            yukler, plaka_sabit = extract_pdf_data(pdf, tasima_turu_secimi=tasima_turu)
+            if not yukler:
+                emit(f"  ⚠ Yük bulunamadı, atlandı.")
+                continue
+            kaynak.append((yukler[0].sefer_no, yukler, plaka_sabit))
+
+    for sn, yukler, plaka_sabit in kaynak:
         if not yukler:
-            emit(f"  ⚠ Yük bulunamadı, atlandı.")
             continue
-        sn = yukler[0].sefer_no
         if sn in sefer_nolar:
             emit(f"  ⚠ Sefer {sn} zaten mevcut, atlandı.")
             atlanan += 1; continue
@@ -511,7 +564,8 @@ def process_pdfs(excel_path: Path, pdf_paths: list[Path], output_path: Path, log
                 un_listesi = ", ".join(sorted({f"UN {y.un_no}" for y in yukler if y.un_no})) or "-"
                 hedef_klasor = docx_cikti_klasor or output_path.parent
                 hedef_klasor.mkdir(parents=True, exist_ok=True)
-                docx_yolu = hedef_klasor / f"Kontrol_{sn}.docx"
+                sn_dosya = re.sub(r'[^\w\-]+', '_', sn)[:80]
+                docx_yolu = hedef_klasor / f"Kontrol_{sn_dosya}.docx"
                 ilk = yukler[0]
                 kontrol_dokumani_olustur(
                     sablon_path=_resource_path("Bosaltma_Kontrol_Sablonu.docx"),
