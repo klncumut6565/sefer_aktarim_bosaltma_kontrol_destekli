@@ -127,11 +127,25 @@ def _append_isim_to_cell(cell: _Cell, isim: str) -> None:
         p.add_run(f" {isim}")
 
 
-def _logo_degistir(document: docx.Document, logo_bytes: bytes) -> bool:
+import base64
+
+# 1x1 tamamen saydam PNG — logo yüklenmediğinde şablonda gömülü olan (varsa)
+# eski/örnek logonun yerine konur. Görsel çerçevenin boyutu/konumu şablonda
+# sabit kaldığından sayfa düzeni bozulmaz, sadece içerik görünmez olur.
+_SAYDAM_PIKSEL = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
+
+
+def _logo_degistir(document: docx.Document, logo_bytes: Optional[bytes]) -> bool:
     """Header'daki tek logo resminin ham byte içeriğini (blob) değiştirir.
     Resmin boyutu/konumu (hücreye göre otomatik ölçeklenir) şablonda
     tanımlı kaldığı için burada sadece içerik değiştirilir.
+    logo_bytes verilmemişse (None/boş) mevcut resim (şablonda gömülü olan
+    örnek/başka firma logosu dahil) saydam bir piksel ile değiştirilerek
+    görünmez kılınır — alan boş görünür ama sayfa düzeni bozulmaz.
     Birden fazla section/header varsa hepsinde dener. Başarılıysa True döner."""
+    icerik = logo_bytes if logo_bytes else _SAYDAM_PIKSEL
     degisti = False
     for section in document.sections:
         header = section.header
@@ -141,7 +155,7 @@ def _logo_degistir(document: docx.Document, logo_bytes: bytes) -> bool:
             continue
         for rel in rels.values():
             if rel.reltype == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image":
-                rel.target_part._blob = logo_bytes
+                rel.target_part._blob = icerik
                 degisti = True
     return degisti
 
@@ -261,8 +275,9 @@ def kontrol_dokumani_olustur(
         _replace_tarih_placeholder(t2.rows[7].cells[1], degerler)
 
     # ---- Logo (header'daki tek resim) ----
-    if logo_bytes:
-        _logo_degistir(d, logo_bytes)
+    # logo_bytes verilmese bile çağrılır: şablonda gömülü eski/örnek logo
+    # varsa saydam piksele çevrilip görünmez kılınır (bkz. _logo_degistir).
+    _logo_degistir(d, logo_bytes)
 
     # ---- Footer: Boşaltan / Taşıyıcı-Şoför Adı Soyadı ----
     if bosaltan_adi or sofor_adi:

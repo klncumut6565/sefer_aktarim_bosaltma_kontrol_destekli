@@ -111,10 +111,12 @@ def _rewrite(ws, gonderimler: list[AtikGonderim], stil: dict,
         if ws.cell(row=row, column=1).value is not None:
             ws.delete_rows(row)
 
-    # Logo
+    # Logo: şablonda önceden gömülü bir logo olabilir (örn. demo/örnek şablon).
+    # Kullanıcı logo yüklemediyse bu eski logo kalmaya devam ederdi — bu yüzden
+    # önce HER ZAMAN temizleniyor, sadece logo_bytes varsa yenisi ekleniyor.
+    if hasattr(ws, '_images'):
+        ws._images = []
     if logo_bytes:
-        if hasattr(ws, '_images'):
-            ws._images = []
         img = XLImage(io.BytesIO(logo_bytes))
         img.width = 140
         img.height = 70

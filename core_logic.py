@@ -324,12 +324,14 @@ def _zebra_map(yukler):
             cm[y.sefer_no] = ZEBRA_COLORS[idx % len(ZEBRA_COLORS)]; idx += 1
     return cm
 
-def _excel_logo_ekle(ws, logo_bytes: bytes) -> None:
+def _excel_logo_ekle(ws, logo_bytes: Optional[bytes]) -> None:
     """Excel'in sol üst köşesindeki (A1:C4 birleşik) logo alanına, verilen
-    logo görselini ekler/değiştirir. Önceki logo varsa kaldırılır."""
-    # Önceki logo(lar) varsa kaldır (yeniden aktarımlarda üst üste binmesin)
+    logo görselini ekler/değiştirir. Önceki logo (şablonda gömülü olan dahil)
+    HER ZAMAN önce kaldırılır; logo_bytes verilmemişse alan boş kalır."""
     if hasattr(ws, "_images"):
         ws._images = [img for img in ws._images if getattr(img, "anchor", None) != "A1"]
+    if not logo_bytes:
+        return
     img = XLImage(io.BytesIO(logo_bytes))
     img.width = 140
     img.height = 70
@@ -584,11 +586,10 @@ def process_pdfs(excel_path: Path, pdf_paths: list[Path], output_path: Path, log
     tum = sorted(mevcut + yeni, key=lambda y: y.sort_key())
     _rewrite(ws, tum, style)
 
-    if logo_bytes:
-        try:
-            _excel_logo_ekle(ws, logo_bytes)
-        except Exception as exc:
-            emit(f"  ⚠ Excel'e logo eklenemedi: {exc}")
+    try:
+        _excel_logo_ekle(ws, logo_bytes)
+    except Exception as exc:
+        emit(f"  ⚠ Excel logo alanı güncellenemedi: {exc}")
 
     wb.save(output_path)
     emit(f"✅ Kaydedildi → {output_path.name}  ({eklenen} yeni sefer, {len(tum)} toplam satır)")

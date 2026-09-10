@@ -79,15 +79,25 @@ def _fill_checkbox(cell, secim: str) -> None:
                 p.add_run(yeni)
 
 
-def _logo_degistir(d: docx.Document, logo_bytes: bytes) -> None:
+import base64
+
+# 1x1 tamamen saydam PNG — logo yüklenmediğinde şablonda gömülü olan (varsa)
+# eski/örnek logonun yerine konur; alan boş görünür, sayfa düzeni bozulmaz.
+_SAYDAM_PIKSEL = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
+
+
+def _logo_degistir(d: docx.Document, logo_bytes: Optional[bytes]) -> None:
     """Firma logosunu SOL ÜST BAŞLIK alanına (header tablosunun ilk hücresi)
     yerleştirir.
 
     ÖNEMLİ: Body'deki kamyon / tanker / konteyner çizimlerine ASLA dokunulmaz.
     Sadece header hedeflenir:
-      1) Header'da zaten logo resmi varsa  -> içeriği değiştirilir.
-      2) Header'da resim yoksa (bu şablonda durum bu) -> header tablosunun
-         sol üst hücresine yeni resim olarak eklenir.
+      1) Header'da zaten logo resmi varsa (şablonda gömülü örnek/başka firma
+         logosu dahil) -> logo_bytes verilmişse onunla, verilmemişse saydam
+         bir pikselle değiştirilir (görünmez olur, alan boş görünür).
+      2) Header'da resim yoksa ve logo_bytes verilmemişse hiçbir şey yapılmaz.
     """
     import io as _io
     from docx.shared import Cm
@@ -95,10 +105,12 @@ def _logo_degistir(d: docx.Document, logo_bytes: bytes) -> None:
     IMAGE_REL_TYPE = ('http://schemas.openxmlformats.org/officeDocument/'
                       '2006/relationships/image')
 
+    icerik = logo_bytes if logo_bytes else _SAYDAM_PIKSEL
+
     for section in d.sections:
         header = section.header
 
-        # 1) Header'da mevcut logo resmi varsa sadece onu güncelle
+        # 1) Header'da mevcut logo resmi varsa (boş bile olsa) değiştir/gizle
         try:
             mevcut = [r for r in header.part.rels.values()
                       if r.reltype == IMAGE_REL_TYPE]
@@ -106,10 +118,13 @@ def _logo_degistir(d: docx.Document, logo_bytes: bytes) -> None:
             mevcut = []
         if mevcut:
             for rel in mevcut:
-                rel.target_part._blob = logo_bytes
+                rel.target_part._blob = icerik
             return
 
-        # 2) Header tablosunun sol üst hücresine logoyu ekle
+        # 2) Header'da hiç resim yok — sadece gerçek bir logo verildiyse ekle
+        if not logo_bytes:
+            return
+
         if header.tables:
             hedef = header.tables[0].rows[0].cells[0]
             for p in hedef.paragraphs:
@@ -182,8 +197,9 @@ def gonderim_dokumani_olustur(
         spacing.set(qn('w:before'), '0')
 
     # ---- Logo ----
-    if logo_bytes:
-        _logo_degistir(d, logo_bytes)
+    # logo_bytes verilmese bile çağrılır: şablonda gömülü eski/örnek logo
+    # varsa saydam piksele çevrilip görünmez kılınır (bkz. _logo_degistir).
+    _logo_degistir(d, logo_bytes)
 
     # ---- Table 0: Üst 3 checkbox (Evet/İlgili Değil/İlgili Değil) ----
     t0 = d.tables[0]
