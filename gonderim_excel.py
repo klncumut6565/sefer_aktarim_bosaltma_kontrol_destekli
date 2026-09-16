@@ -28,7 +28,7 @@ Sütun haritası (başlık satırı = 6, veri = 7+):
 from __future__ import annotations
 
 from copy import copy
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -65,6 +65,26 @@ COL = {
 
 DATA_START_ROW = 6
 ZEBRA_RENKLER = ['D9E1F2', 'FFFFFF']  # Mavi/Beyaz zebra
+
+
+def _excel_serial_to_datetime(serial_number: float) -> Optional[datetime]:
+    """Excel'deki serial tarih formatını datetime'a çevirir.
+    
+    Excel tarihleri 1900-01-01 itibaren gün sayısı olarak depolanır.
+    Örn: 46036.71840277778 = 2026-01-24 17:14:24
+    """
+    if not isinstance(serial_number, (int, float)):
+        return None
+    if serial_number < 1:
+        return None
+    
+    # Excel epoch: 1900-01-01 (bug: 1900 leap year diye kabul ediyor)
+    # Python: 1899-12-30 + n gün
+    excel_epoch = datetime(1899, 12, 30)
+    try:
+        return excel_epoch + timedelta(days=serial_number)
+    except (OverflowError, ValueError):
+        return None
 
 
 def _zebra_fill(renk_hex: str) -> PatternFill:
@@ -166,12 +186,26 @@ def _rewrite(ws, gonderimler: list[AtikGonderim], stil: dict,
                 if s['border']:
                     cell.border = copy(s['border'])
                 if s['alignment']:
-                    cell.alignment = copy(s['alignment'])
+                    # Alignment'ı kopyala ve text wrap ekle
+                    alignment_copy = copy(s['alignment'])
+                    alignment_copy.wrap_text = True
+                    cell.alignment = alignment_copy
+                else:
+                    # Stil yoksa yeni alignment oluştur
+                    cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
                 if s['number_format']:
                     cell.number_format = s['number_format']
+            else:
+                # Stil yoksa wrap_text'i ayarla
+                cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+            
+            # Tarih sütunu: Format belirt (dd.mm.yyyy hh:mm)
+            if col == COL['tarih'] and isinstance(deger, datetime):
+                cell.number_format = 'dd.mm.yyyy hh:mm'
             # Taşıma No: Text format (scientific notation'a dönüşmesin)
-            if col == COL['evraki']:
+            elif col == COL['evraki']:
                 cell.number_format = "@"
+            
             cell.fill = fill
 
         ws.row_dimensions[row].height = 45
@@ -237,8 +271,16 @@ def process_export(
             un_ham = str(ws.cell(row=row, column=COL['un_no']).value or '')
             un_listesi = [p.strip().removeprefix('UN ').strip() for p in un_ham.split(',') if p.strip()]
 
+            # Tarih dönüştürme: datetime veya Excel serial date
+            if isinstance(tarih_val, datetime):
+                tarih_dt = tarih_val
+            elif isinstance(tarih_val, (int, float)):
+                tarih_dt = _excel_serial_to_datetime(tarih_val)
+            else:
+                tarih_dt = None
+
             g_mevcut = AtikGonderim(
-                tarih=tarih_val if isinstance(tarih_val, datetime) else None,
+                tarih=tarih_dt,
                 tasiyici=str(tasiyici_val),
                 plaka=str(plaka_val),
                 alici='',
