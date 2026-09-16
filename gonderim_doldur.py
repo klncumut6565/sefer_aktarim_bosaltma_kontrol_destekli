@@ -249,31 +249,56 @@ def gonderim_dokumani_olustur(
         if row_idx < len(t2.rows):
             _write_cell(t2.rows[row_idx].cells[5], TIK)
 
-    # ---- Table 4: İmza tablosu (body'de, footer değil) ----
-    # Gönderim formunda imza bilgileri body'deki son tabloda
+    # ---- Table 4: İmza tablosu (Gönderen/Şoför Kaşe İmza alanları) ----
+    # Tablolarda "Gönderen" veya "Şoför" yazısı içeren hücreler ara
+    # (ri == 0 && ci == 0 şartı çok spesifik olabilir, esnek arama yap)
     for ti in range(len(d.tables) - 1, -1, -1):
         t = d.tables[ti]
         for ri, row in enumerate(t.rows):
             for ci, cell in enumerate(row.cells):
                 txt = cell.text.strip()
-                if 'Gönderen' in txt and ri == 0 and ci == 0:
-                    # İmza satırı bulundu
-                    if gonderici_adi:
-                        # "Gönderen" yazısının yanına isim ekle
-                        for p in cell.paragraphs:
-                            full = ''.join(r.text for r in p.runs)
-                            if 'Gönderen' in full and ':' in full:
-                                if p.runs:
-                                    p.runs[-1].text = p.runs[-1].text + f' {gonderici_adi}'
-                                break
+                
+                # "Gönderen Kaşe İmza" veya benzeri yazı varsa
+                if 'Gönderen' in txt and gonderici_adi:
+                    # Hücredeki tüm paragrafları kontrol et
+                    bulundu = False
+                    for p in cell.paragraphs:
+                        full = ''.join(r.text for r in p.runs)
+                        if 'Gönderen' in full:
+                            # İsim ekle
+                            if p.runs:
+                                # Son run'a ekle
+                                last_run = p.runs[-1]
+                                if ':' in last_run.text:
+                                    # "Gönderen:" formatı varsa boşluk + ad
+                                    last_run.text = last_run.text.rstrip() + f' {gonderici_adi}'
+                                else:
+                                    # Yoksa yeni run oluştur
+                                    p.add_run(f' {gonderici_adi}')
+                            else:
+                                # Run yoksa paragraph'a ekle
+                                p.add_run(f': {gonderici_adi}')
+                            bulundu = True
+                            break
+                    
+                    # Yan sütunda Şoför adı varsa onu da doldur
                     if sofor_adi and ci + 1 < len(row.cells):
                         sof_cell = row.cells[ci + 1]
-                        for p in sof_cell.paragraphs:
-                            full = ''.join(r.text for r in p.runs)
-                            if 'Şoför' in full or 'Soyadı' in full:
-                                if p.runs:
-                                    p.runs[-1].text += f' {sofor_adi}'
-                                break
+                        sof_txt = sof_cell.text.strip()
+                        if 'Şoför' in sof_txt or 'şoför' in sof_txt.lower():
+                            for p in sof_cell.paragraphs:
+                                full = ''.join(r.text for r in p.runs)
+                                if 'Şoför' in full or 'şoför' in full.lower():
+                                    if p.runs:
+                                        last_run = p.runs[-1]
+                                        if ':' in last_run.text:
+                                            last_run.text = last_run.text.rstrip() + f' {sofor_adi}'
+                                        else:
+                                            p.add_run(f' {sofor_adi}')
+                                    break
+                    
+                    if bulundu:
+                        break
 
     # Taşıma Evrağı No'yu talimat tablosunun üstüne ekle (paragraf olarak)
     # veya Table 1'e ekstra satır olarak — burada Table 1'deki 5. satırı kullan
