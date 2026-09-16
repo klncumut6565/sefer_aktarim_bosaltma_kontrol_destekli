@@ -645,6 +645,23 @@ def process_pdfs(excel_path: Path, pdf_paths: list[Path], output_path: Path, log
     except Exception as exc:
         emit(f"  ⚠ Excel logo alanı güncellenemedi: {exc}")
 
+    # ---- İmza Bölümü (Hazırlayan, Kontrol Eden, Onaylayan) ----
+    signature_row = 7 + len(tum) + 2  # Veri sonrasından 2 satır boşluk
+    
+    sig_labels = {
+        3: 'HAZIRLAYAN\n_______________\nAdı Soyadı / İmza',
+        10: 'KONTROL EDEN\nYakup ATAŞ\nTehlikeli Madde Güvenlik Danışmanı Koordinatörü',
+        16: 'ONAYLAYAN\nSorumlu Kişi\nAdı Soyadı / İmza',
+    }
+    
+    for col_num, label_text in sig_labels.items():
+        cell = ws.cell(row=signature_row, column=col_num, value=label_text)
+        cell.alignment = Alignment(horizontal='center', vertical='top', wrap_text=True)
+        if col_num == 10:  # KONTROL EDEN
+            cell.font = Font(bold=True, size=10)
+    
+    ws.row_dimensions[signature_row].height = 60
+
     wb.save(output_path)
     emit(f"✅ Kaydedildi → {output_path.name}  ({eklenen} yeni sefer, {len(tum)} toplam satır)")
     return {"eklenen": eklenen, "atlanan": atlanan, "toplam": len(tum),

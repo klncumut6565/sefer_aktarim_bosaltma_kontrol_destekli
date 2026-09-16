@@ -294,6 +294,30 @@ def process_export(
     tum = sorted(mevcut_gonderimler + yeni, key=lambda g: g.tarih or datetime.min)
     _rewrite(ws, tum, stil, gonderici_adi=gonderici_adi, logo_bytes=logo_bytes)
 
+    # ---- İmza Bölümü (Hazırlayan, Kontrol Eden, Onaylayan) ----
+    # Veri sonrasından 2 satır boşluk bırakarak imza satırlarını ekle
+    signature_row = DATA_START_ROW + len(tum) + 2
+    
+    # C, J, P sütunlarına (3, 10, 16) imza bilgileri ekle
+    # Row 0: Başlıklar (HAZIRLAYAN, KONTROL EDEN, ONAYLAYAN)
+    sig_labels = {
+        3: f'HAZIRLAYAN\n{gonderici_adi or "_______________"}\nAdı Soyadı / İmza',
+        10: 'KONTROL EDEN\nYakup ATAŞ\nTehlikeli Madde Güvenlik Danışmanı Koordinatörü',
+        16: 'ONAYLAYAN\nSorumlu Kişi\nAdı Soyadı / İmza',
+    }
+    
+    for col_num, label_text in sig_labels.items():
+        cell = ws.cell(row=signature_row, column=col_num, value=label_text)
+        cell.alignment = Alignment(horizontal='center', vertical='top', wrap_text=True)
+        if col_num == 10:  # KONTROL EDEN — kalın yazı
+            cell.font = Font(bold=True, size=10)
+    
+    # Boş imza satırları (4 boş satır)
+    for offset in range(1, 5):
+        pass  # Satırlar zaten boş olacak
+    
+    ws.row_dimensions[signature_row].height = 60
+
     cikti_path = Path(cikti_path)
     cikti_path.parent.mkdir(parents=True, exist_ok=True)
     
