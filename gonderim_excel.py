@@ -199,9 +199,9 @@ def _rewrite(ws, gonderimler: list[AtikGonderim], stil: dict,
                 # Stil yoksa wrap_text'i ayarla
                 cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
             
-            # Tarih sütunu: Format belirt (dd.mm.yyyy hh:mm)
+            # Tarih sütunu: Format belirt (dd.mm.yyyy — sadece tarih, saat yok)
             if col == COL['tarih'] and isinstance(deger, datetime):
-                cell.number_format = 'dd.mm.yyyy hh:mm'
+                cell.number_format = 'dd.mm.yyyy'
             # Taşıma No: Text format (scientific notation'a dönüşmesin)
             elif col == COL['evraki']:
                 cell.number_format = "@"
