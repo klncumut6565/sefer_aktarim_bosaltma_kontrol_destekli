@@ -296,6 +296,12 @@ def process_export(
 
     cikti_path = Path(cikti_path)
     cikti_path.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(str(cikti_path))
-    emit(f'✅ Excel kaydedildi → {cikti_path.name} ({len(yeni)} yeni, {len(tum)} toplam)')
+    
+    try:
+        wb.save(str(cikti_path))
+        emit(f'✅ Excel kaydedildi → {cikti_path.name} ({len(yeni)} yeni, {len(tum)} toplam)')
+    except Exception as e:
+        emit(f'❌ HATA: Excel kaydedilemedi: {e}')
+        raise
+    
     return {'eklenen': len(yeni), 'atlanan': atlanan, 'toplam': len(tum)}

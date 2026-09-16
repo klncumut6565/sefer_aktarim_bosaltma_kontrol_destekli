@@ -685,14 +685,24 @@ if st.session_state.sonuc:
         with col_exc:
             label = "📊 Excel Taşıma Kontrol Listesi" if tip == "bosaltma" else "📊 Excel Atık Gönderim Listesi"
             st.markdown(f"#### {label}")
-            excel_path: Path = r["_excel_yolu"]
-            st.download_button(
-                "⬇️ Excel'i İndir",
-                data=excel_path.read_bytes(),
-                file_name=excel_path.name,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
+            excel_path: Path = r.get("_excel_yolu")
+            
+            if not excel_path:
+                st.error("❌ Excel dosya yolu bulunamadı")
+            elif not excel_path.is_file():
+                st.error(f"❌ Excel dosyası bulunamadı: {excel_path}")
+            else:
+                try:
+                    excel_bytes = excel_path.read_bytes()
+                    st.download_button(
+                        "⬇️ Excel'i İndir",
+                        data=excel_bytes,
+                        file_name=excel_path.name,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                    )
+                except Exception as e:
+                    st.error(f"❌ Excel okunamadı: {e}")
 
     # Kontrol dökümanları indirme
     with col_dok:
